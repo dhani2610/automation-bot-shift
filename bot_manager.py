@@ -4,12 +4,15 @@ from __future__ import annotations
 
 import datetime as dt
 import threading
+import time
 from typing import Any
 
 import db
-from auto_booking import MYT, find_matching_slots
+from auto_booking import DEFAULT_SLOTS, MYT, find_matching_slots
 from locum_api import ApiError, LocumClient
 from notifier import format_booking_notification, send_telegram_message
+
+SLOT_LABEL_MAP = dict(DEFAULT_SLOTS)
 
 WIB = dt.timezone(dt.timedelta(hours=7), name="WIB")
 
@@ -388,12 +391,18 @@ class BotManager:
         role_key = client.session.role_key if client.session else "mo"
 
         target_run_dt: dt.datetime | None = None
+        strike_pool: list[LocumClient] = []
+        strike_targets = self._resolve_target_dates(job.get("target_dates") or [], None)
+        has_direct_strike = bool(mode == "scheduled" and not dry_run and strike_targets and slot_filters)
+
         if mode == "scheduled":
             target_run_dt = compute_run_datetime(
                 job.get("schedule_time") or "00:00:00",
                 job.get("schedule_tz") or "MYT",
                 job.get("schedule_date"),
             )
+            strike_targets = self._resolve_target_dates(job.get("target_dates") or [], target_run_dt)
+            has_direct_strike = bool(not dry_run and strike_targets and slot_filters)
             myt_naive = to_myt_naive(target_run_dt)
             wib_dt = target_run_dt.astimezone(WIB)
             wait_msg = (
@@ -405,9 +414,10 @@ class BotManager:
 
             refreshed = False
             warmed = False
+            wake_lead = 0.25 if has_direct_strike else 3.0
             while not stop_event.is_set():
                 remaining = (target_run_dt - dt.datetime.now(target_run_dt.tzinfo)).total_seconds()
-                if remaining <= 3.0:
+                if remaining <= wake_lead:
                     break
                 if remaining <= 60.0 and not refreshed:
                     try:
@@ -422,13 +432,43 @@ class BotManager:
                     except ApiError as exc:
                         self._safe_log(job_id, ic, "WARN", f"Gagal refresh token: {exc}")
                 if remaining <= 10.0 and not warmed:
-                    try:
-                        client.get_availability()
-                        warmed = True
-                        self._safe_log(job_id, ic, "INFO", "Koneksi & cache endpoint dipanaskan 10 detik sebelum mulai.")
-                    except ApiError:
-                        warmed = True
-                stop_event.wait(min(1.0, max(0.05, remaining - 3.0)))
+                    warmed = True
+                    if has_direct_strike:
+                        strike_pool = [client]
+                        for _ in range(5):
+                            clone = self._client_factory()
+                            clone.session = client.session
+                            clone._ic = client._ic
+                            clone._last4 = client._last4
+                            strike_pool.append(clone)
+
+                        def _warm_one(c: LocumClient) -> None:
+                            try:
+                                c.get_availability()
+                            except ApiError:
+                                pass
+
+                        warm_threads = [
+                            threading.Thread(target=_warm_one, args=(c,), daemon=True)
+                            for c in strike_pool
+                        ]
+                        for th in warm_threads:
+                            th.start()
+                        for th in warm_threads:
+                            th.join(timeout=6.0)
+                        self._safe_log(
+                            job_id,
+                            ic,
+                            "INFO",
+                            f"Koneksi {len(strike_pool)} session dipanaskan 10 detik sebelum mulai (Direct-Strike 0.1s aktif).",
+                        )
+                    else:
+                        try:
+                            client.get_availability()
+                            self._safe_log(job_id, ic, "INFO", "Koneksi & cache endpoint dipanaskan 10 detik sebelum mulai.")
+                        except ApiError:
+                            pass
+                stop_event.wait(min(1.0, max(0.02, remaining - wake_lead)))
 
             if stop_event.is_set():
                 self._safe_status(job_id, "stopped", "Dihentikan saat menunggu jadwal.", clear_next_run=True)
@@ -471,6 +511,98 @@ class BotManager:
             )
             th.start()
             notify_threads.append(th)
+
+        if has_direct_strike and target_run_dt is not None and strike_pool:
+            strike_pairs = [
+                (d, s)
+                for d in sorted(target_dates or set())
+                for s in (slot_filters or [])
+                if (d, s) not in booked_keys and not (one_per_day and d in booked_dates)
+            ]
+            if strike_pairs:
+                wave_offsets = (-0.10, 0.00, 0.10, 0.25, 0.50, 1.00)
+                strike_lock = threading.Lock()
+                strike_errors: list[str] = []
+
+                def _fire_wave(wave_idx: int, offset_sec: float, date_str: str, slot_key: str) -> None:
+                    nonlocal success_count, run_booked
+                    fire_at = target_run_dt + dt.timedelta(seconds=offset_sec)
+                    while not stop_event.is_set():
+                        wait_s = (fire_at - dt.datetime.now(fire_at.tzinfo)).total_seconds()
+                        if wait_s <= 0:
+                            break
+                        if wait_s > 0.03:
+                            stop_event.wait(wait_s - 0.015)
+                        else:
+                            time.sleep(wait_s)
+                            break
+                    with strike_lock:
+                        if stop_event.is_set() or (max_bookings > 0 and success_count >= max_bookings):
+                            return
+                        if (date_str, slot_key) in booked_keys or (one_per_day and date_str in booked_dates):
+                            return
+                    c = strike_pool[wave_idx % len(strike_pool)]
+                    slot_label = SLOT_LABEL_MAP.get(slot_key, slot_key)
+                    try:
+                        booking = c.book_slot(date_str, slot_key)
+                    except ApiError as exc:
+                        with strike_lock:
+                            strike_errors.append(str(exc))
+                        return
+
+                    ref_id = str(booking.get("id") or "-")
+                    seat = str(booking.get("seat") or "-")
+                    delta_ms = (dt.datetime.now(target_run_dt.tzinfo) - target_run_dt).total_seconds() * 1000.0
+                    with strike_lock:
+                        if max_bookings > 0 and success_count >= max_bookings:
+                            return
+                        success_count += 1
+                        run_booked += 1
+                        booked_keys.add((date_str, slot_key))
+                        booked_dates.add(date_str)
+                    notify_async(
+                        job_id=job_id,
+                        account=account,
+                        job_title=job_title,
+                        mode=mode,
+                        outcome="SUCCESS",
+                        slot_date=date_str,
+                        slot_key=slot_key,
+                        slot_label=slot_label,
+                        seat=seat,
+                        booking_ref=ref_id,
+                        reason=f"Direct-Strike berhasil ({delta_ms:+.0f}ms dari jadwal).",
+                        is_dry_run=False,
+                    )
+                    msg = f"BERHASIL BOOKING (Direct-Strike {delta_ms:+.0f}ms)! {date_str} | {slot_label} | Seat {seat} | Ref {ref_id}"
+                    self._safe_log(job_id, ic, "SUCCESS", msg)
+                    self._safe_status(job_id, "running", msg, success_count=success_count)
+
+                wave_threads: list[threading.Thread] = []
+                w_idx = 0
+                for offset_sec in wave_offsets:
+                    for date_str, slot_key in strike_pairs:
+                        th = threading.Thread(
+                            target=_fire_wave,
+                            args=(w_idx, offset_sec, date_str, slot_key),
+                            daemon=True,
+                            name=f"strike-{job_id}-{w_idx}",
+                        )
+                        th.start()
+                        wave_threads.append(th)
+                        w_idx += 1
+
+                for th in wave_threads:
+                    th.join(timeout=6.0)
+
+                if max_bookings <= 0 or success_count < max_bookings:
+                    last_err = strike_errors[-1] if strike_errors else "belum ada respons"
+                    self._safe_log(
+                        job_id,
+                        ic,
+                        "INFO",
+                        f"Direct-Strike 6 gelombang selesai ({last_err}); lanjut rapid-polling availability...",
+                    )
 
         while not stop_event.is_set():
             if max_bookings > 0 and success_count >= max_bookings:
