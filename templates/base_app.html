@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="id" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#4f46e5">
+  <title>{% block title %}LocumSync — Smart Auto-Booking Dashboard{% endblock %}</title>
+  <script>
+    try {
+      const s = JSON.parse(localStorage.getItem('locum_dash_user'));
+      if (!s || !s.profile || !s.profile.ic) window.location.replace('/login');
+    } catch {
+      window.location.replace('/login');
+    }
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
+  <link rel="stylesheet" href="/static/style.css?v=4">
+</head>
+<body data-page="{{ page_name }}">
+  <div id="dashView" class="app-shell">
+    <!-- DESKTOP SIDEBAR -->
+    <aside class="sidebar">
+      <div class="sidebar-brand">
+        <div class="logo-badge"><i class="fa-solid fa-hospital-user"></i></div>
+        <div>
+          <div class="brand-title">LocumSync</div>
+          <div class="brand-sub">ED HJ Auto-Booking</div>
+        </div>
+      </div>
+
+      <div class="sidebar-profile">
+        <div id="profAvatar" class="avatar">H</div>
+        <div class="prof-text">
+          <div class="prof-name" id="profName">-</div>
+          <div class="prof-sub"><span class="role-tag" id="profRole">MO</span> · <span id="profReg">-</span></div>
+          <div class="prof-work" id="profWork">-</div>
+        </div>
+      </div>
+
+      <nav id="desktopNav" class="side-nav">
+        <a href="/jadwal" class="nav-btn {% if active_page == 'jadwal' %}active{% endif %}"><i class="fa-regular fa-calendar-days fa-fw"></i> Jadwal &amp; Slot</a>
+        <a href="/auto-book" class="nav-btn {% if active_page == 'auto_book' %}active{% endif %}"><i class="fa-solid fa-robot fa-fw"></i> Atur Auto-Book</a>
+        <a href="/riwayat" class="nav-btn {% if active_page == 'riwayat' %}active{% endif %}"><i class="fa-solid fa-clipboard-list fa-fw"></i> Booking &amp; Riwayat</a>
+        <a href="/logs" class="nav-btn {% if active_page == 'logs' %}active{% endif %}">
+          <i class="fa-solid fa-terminal fa-fw"></i> Live Log Bot
+          <span id="activeJobDot" class="pulse-dot hidden"></span>
+        </a>
+        <a href="/telegram" class="nav-btn {% if active_page == 'telegram' %}active{% endif %}"><i class="fa-brands fa-telegram fa-fw"></i> Bot Telegram</a>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="tz-card">
+          <div class="tz-row"><span><i class="fa-regular fa-clock fa-fw"></i> Malaysia (MYT)</span><b id="clockMyt">--:--:--</b></div>
+          <div class="tz-row"><span><i class="fa-solid fa-globe fa-fw"></i> Lokal (WIB)</span><b id="clockWib">--:--:--</b></div>
+        </div>
+        <div class="sidebar-foot-actions">
+          <button type="button" class="icon-btn theme-toggle" title="Ganti Tema"><i class="fa-solid fa-moon"></i></button>
+          <button type="button" id="btnLogout" class="btn soft sm" style="flex:1" title="Keluar / Ganti Akun"><i class="fa-solid fa-right-from-bracket"></i> Keluar</button>
+        </div>
+      </div>
+    </aside>
+
+    <!-- MAIN CONTENT -->
+    <div class="main-area">
+      <!-- MOBILE TOPBAR -->
+      <header class="mobile-topbar">
+        <div class="brand-mark">
+          <div class="logo-badge sm"><i class="fa-solid fa-hospital-user"></i></div>
+          <div>
+            <div class="brand-title sm" id="mobProfName">LocumSync</div>
+            <div class="brand-sub" id="mobProfMeta">MYT <span id="clockMytMob">--:--</span> · WIB <span id="clockWibMob">--:--</span></div>
+          </div>
+        </div>
+        <div class="mob-actions">
+          <button type="button" class="icon-btn theme-toggle" title="Ganti Tema"><i class="fa-solid fa-moon"></i></button>
+          <button type="button" id="btnLogoutMob" class="icon-btn danger-ghost" title="Keluar"><i class="fa-solid fa-right-from-bracket"></i></button>
+        </div>
+      </header>
+
+      <div class="content-wrap">
+        <div id="dbWarning" class="banner-alert hidden"></div>
+
+        <!-- KPI SUMMARY STRIP -->
+        <section class="kpi-grid">
+          <div class="kpi-card">
+            <div class="kpi-icon green"><i class="fa-solid fa-calendar-check"></i></div>
+            <div>
+              <div class="kpi-val" id="kpiOpen">0</div>
+              <div class="kpi-lbl">Slot OPEN</div>
+            </div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-icon indigo"><i class="fa-solid fa-user-check"></i></div>
+            <div>
+              <div class="kpi-val" id="kpiBooked">0</div>
+              <div class="kpi-lbl">Booking Aktif</div>
+            </div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-icon amber"><i class="fa-solid fa-bolt"></i></div>
+            <div>
+              <div class="kpi-val" id="kpiJobs">0</div>
+              <div class="kpi-lbl">Bot Aktif / Antri</div>
+            </div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-icon emerald"><i class="fa-solid fa-trophy"></i></div>
+            <div>
+              <div class="kpi-val" id="kpiSuccess">0</div>
+              <div class="kpi-lbl">Berhasil Bot</div>
+            </div>
+          </div>
+        </section>
+
+        {% block content %}{% endblock %}
+      </div>
+    </div>
+  </div>
+
+  <!-- MOBILE BOTTOM DOCK -->
+  <nav id="mobileNav" class="mobile-nav">
+    <a href="/jadwal" class="mnav-btn {% if active_page == 'jadwal' %}active{% endif %}"><i class="fa-regular fa-calendar-days"></i><small>Jadwal</small></a>
+    <a href="/auto-book" class="mnav-btn {% if active_page == 'auto_book' %}active{% endif %}"><i class="fa-solid fa-robot"></i><small>Auto-Book</small></a>
+    <a href="/riwayat" class="mnav-btn {% if active_page == 'riwayat' %}active{% endif %}"><i class="fa-solid fa-clipboard-list"></i><small>Riwayat</small></a>
+    <a href="/logs" class="mnav-btn {% if active_page == 'logs' %}active{% endif %}"><i class="fa-solid fa-terminal"></i><small>Log</small></a>
+    <a href="/telegram" class="mnav-btn {% if active_page == 'telegram' %}active{% endif %}"><i class="fa-brands fa-telegram"></i><small>Telegram</small></a>
+  </nav>
+
+  {% block modals %}{% endblock %}
+
+  <!-- CONFIRM / DETAIL MODAL -->
+  <div id="modalBack" class="modal-back hidden">
+    <div class="modal-card">
+      <h3 id="modalTitle">Konfirmasi</h3>
+      <div id="modalBody" class="modal-body"></div>
+      <div class="btn-row">
+        <button type="button" id="modalConfirm" class="btn primary">Ya, Lanjutkan</button>
+        <button type="button" id="modalCancel" class="btn soft">Batal</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast"></div>
+  <script src="/static/app.js?v=4"></script>
+</body>
+</html>
+

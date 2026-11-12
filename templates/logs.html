@@ -1,0 +1,33 @@
+{% extends "base_app.html" %}
+
+{% block title %}Live Log Per Scheduler — LocumSync{% endblock %}
+
+{% block content %}
+<section id="page-logs">
+  <div class="panel-card">
+    <div class="section-header">
+      <div>
+        <h2>Live Log Per Scheduler (MySQL)</h2>
+        <p class="muted">Pilih scheduler di bawah untuk memantau log masing-masing bot secara terpisah.</p>
+      </div>
+      <div class="log-controls">
+        <select id="logJobFilter">
+          <option value="ALL">Semua Log</option>
+        </select>
+        <select id="logLevelFilter">
+          <option value="ALL">Semua Level</option>
+          <option value="SUCCESS">SUCCESS</option>
+          <option value="INFO">INFO</option>
+          <option value="WARN">WARN</option>
+          <option value="ERROR">ERROR</option>
+        </select>
+        <button type="button" id="btnRefreshLogs" class="btn soft sm"><i class="fa-solid fa-rotate-right"></i> Refresh</button>
+      </div>
+    </div>
+    <div id="logSchedulerTabs" class="log-sched-tabs"></div>
+    <div id="logSelectedBanner" class="log-sched-banner hidden"></div>
+    <div id="logsContainer" class="logs-box"></div>
+  </div>
+</section>
+{% endblock %}
+

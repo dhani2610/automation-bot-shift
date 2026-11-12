@@ -1,0 +1,36 @@
+{% extends "base_app.html" %}
+
+{% block title %}Booking &amp; Riwayat — LocumSync{% endblock %}
+
+{% block content %}
+<section id="page-riwayat">
+  <div class="two-col">
+    <div class="panel-card">
+      <div class="card-header">
+        <h2>Booking Aktif (Server Locum)</h2>
+        <p class="muted small" id="cutoffNote">Batas cancel gratis: 24 jam sebelum shift.</p>
+      </div>
+      <div id="myBookingsList" class="stack-sm"></div>
+    </div>
+
+    <div class="panel-card">
+      <div class="section-header compact">
+        <div>
+          <h2>Riwayat Dapat / Gagal (MySQL)</h2>
+          <p class="muted small">Klik <b>Detail</b> untuk informasi lengkap &amp; status Telegram.</p>
+        </div>
+        <button type="button" id="btnRefreshHistory" class="btn soft sm"><i class="fa-solid fa-rotate-right"></i> Refresh</button>
+      </div>
+      <div id="historySummary" class="stats-row"></div>
+      <div class="segmented wrap" style="margin-bottom:12px">
+        <button type="button" class="seg-btn active" data-hist-filter="ALL">Semua</button>
+        <button type="button" class="seg-btn" data-hist-filter="SUCCESS"><i class="fa-solid fa-circle-check"></i> Dapat</button>
+        <button type="button" class="seg-btn" data-hist-filter="FAILED_GROUP"><i class="fa-solid fa-circle-xmark"></i> Tidak Dapat</button>
+        <button type="button" class="seg-btn" data-hist-filter="DRY_RUN"><i class="fa-solid fa-flask"></i> Simulasi</button>
+      </div>
+      <div id="resultsList" class="stack-sm"></div>
+    </div>
+  </div>
+</section>
+{% endblock %}
+

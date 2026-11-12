@@ -1,0 +1,65 @@
+{% extends "base_app.html" %}
+
+{% block title %}Konfigurasi Telegram — LocumSync{% endblock %}
+
+{% block content %}
+<section id="page-telegram">
+  <div class="two-col">
+    <div class="panel-card">
+      <div class="card-header">
+        <h2>Konfigurasi Notifikasi Telegram</h2>
+        <p class="muted small">Terima laporan instan ke Telegram setiap kali bot berhasil atau gagal booking.</p>
+      </div>
+
+      <form id="tgForm" class="form-stack">
+        <div class="field">
+          <label for="tgToken">Bot Token (dari @BotFather)</label>
+          <input id="tgToken" type="text" placeholder="1234567890:AAHxxxxxxxxxxxxxxxxxxxxxxxx" autocomplete="off">
+        </div>
+        <div class="field">
+          <label for="tgChatId">Chat ID Tujuan</label>
+          <input id="tgChatId" type="text" placeholder="Contoh: 123456789 atau -100xxxxxxxxxx" autocomplete="off">
+        </div>
+
+        <div class="switches">
+          <label class="toggle">
+            <input type="checkbox" id="tgEnabled" checked>
+            <span>Aktifkan Notifikasi Telegram</span>
+          </label>
+          <label class="toggle">
+            <input type="checkbox" id="tgSuccess" checked>
+            <span>Kirim notif saat <b>BERHASIL dapat booking</b></span>
+          </label>
+          <label class="toggle">
+            <input type="checkbox" id="tgFail" checked>
+            <span>Kirim notif saat <b>GAGAL / Tidak dapat slot</b></span>
+          </label>
+          <label class="toggle">
+            <input type="checkbox" id="tgDry">
+            <span>Kirim notif saat <b>Mode Simulasi (Dry-Run)</b></span>
+          </label>
+        </div>
+
+        <div class="btn-row">
+          <button type="submit" class="btn primary"><i class="fa-solid fa-floppy-disk"></i> Simpan Setting Telegram</button>
+          <button type="button" id="btnTestTg" class="btn soft"><i class="fa-solid fa-paper-plane"></i> Tes Kirim Pesan</button>
+        </div>
+      </form>
+    </div>
+
+    <div class="panel-card">
+      <div class="card-header">
+        <h2>Cara Setup Bot Telegram</h2>
+        <p class="muted small">Hanya butuh 1 menit agar HP langsung menerima notif.</p>
+      </div>
+      <div class="guide-list">
+        <div class="guide-step"><span class="g-num">1</span><div>Buka Telegram, cari <code>@BotFather</code>, kirim <code>/newbot</code>, lalu salin <b>Bot Token</b>.</div></div>
+        <div class="guide-step"><span class="g-num">2</span><div>Buka bot baru Anda di Telegram dan tekan tombol <b>Start</b> agar bot diizinkan mengirim pesan.</div></div>
+        <div class="guide-step"><span class="g-num">3</span><div>Cari <code>@userinfobot</code> di Telegram untuk melihat angka <b>Id</b> Anda, lalu masukkan ke <b>Chat ID</b>.</div></div>
+        <div class="guide-step"><span class="g-num">4</span><div>Klik <b>Simpan Setting Telegram</b> lalu <b>Tes Kirim Pesan</b> untuk memastikan notif masuk.</div></div>
+      </div>
+    </div>
+  </div>
+</section>
+{% endblock %}
+

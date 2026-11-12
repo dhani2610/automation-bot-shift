@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="id" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#4f46e5">
+  <title>Masuk — LocumSync</title>
+  <script>
+    try {
+      const s = JSON.parse(localStorage.getItem('locum_dash_user'));
+      if (s && s.profile && s.profile.ic) window.location.replace('/jadwal');
+    } catch {}
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
+  <link rel="stylesheet" href="/static/style.css?v=4">
+</head>
+<body data-page="login">
+  <div id="loginView" class="auth-shell">
+    <div class="auth-topbar">
+      <div class="brand-mark">
+        <div class="logo-badge"><i class="fa-solid fa-hospital-user"></i></div>
+        <div>
+          <span class="brand-title">LocumSync</span>
+          <span class="brand-sub">ED HJ Automation</span>
+        </div>
+      </div>
+      <div class="auth-status-row">
+        <div class="clock-chip"><i class="fa-regular fa-clock"></i> <span>MYT</span> <b id="clockMytLogin">--:--:--</b></div>
+        <div class="clock-chip"><i class="fa-solid fa-globe"></i> <span>WIB</span> <b id="clockWibLogin">--:--:--</b></div>
+        <button type="button" class="icon-btn theme-toggle" title="Ganti Tema Terang/Gelap"><i class="fa-solid fa-moon"></i></button>
+      </div>
+    </div>
+
+    <div id="dbWarningLogin" class="banner-alert hidden"></div>
+
+    <div class="auth-grid">
+      <div class="auth-hero">
+        <span class="hero-eyebrow"><i class="fa-solid fa-bolt"></i> Smart Shift Automation</span>
+        <h1>Atur &amp; Booking Jadwal Locum Lebih Cepat, Tanpa Begadang.</h1>
+        <p class="hero-desc">
+          Pilih tanggal &amp; prioritas jam shift dari HP atau PC, set tepat pukul <b>00:00 Waktu Malaysia</b>, dan terima notifikasi instan ke Telegram saat slot berhasil diamankan.
+        </p>
+
+        <div class="feature-list">
+          <div class="feature-item">
+            <span class="f-icon"><i class="fa-regular fa-clock"></i></span>
+            <div>
+              <b>Scheduler Tepat Jam Malaysia</b>
+              <small>Auto rapid-booking tepat 00:00 MYT (23:00 WIB) saat tanggal baru dibuka.</small>
+            </div>
+          </div>
+          <div class="feature-item">
+            <span class="f-icon"><i class="fa-solid fa-arrows-rotate"></i></span>
+            <div>
+              <b>Pantau Slot Batalan 24/7</b>
+              <small>Deteksi slot kosong mendadak dan langsung kunci shift sesuai prioritas Anda.</small>
+            </div>
+          </div>
+          <div class="feature-item">
+            <span class="f-icon"><i class="fa-brands fa-telegram"></i></span>
+            <div>
+              <b>Notifikasi &amp; Riwayat MySQL</b>
+              <small>Laporan berhasil/gagal tercatat rapi di phpMyAdmin dan dikirim ke Telegram.</small>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="auth-card">
+        <div class="auth-card-head">
+          <h2>Masuk ke Akun Anda</h2>
+          <p>Gunakan IC Number &amp; 4 digit terakhir nomor telepon yang terdaftar.</p>
+        </div>
+
+        <form id="loginForm" class="form-stack" novalidate>
+          <div class="field">
+            <label for="loginIc">IC Number (12 digit tanpa '-')</label>
+            <div class="input-wrap">
+              <span class="in-icon"><i class="fa-regular fa-id-card"></i></span>
+              <input id="loginIc" type="tel" inputmode="numeric" maxlength="12" placeholder="910725065438" autocomplete="off" required>
+            </div>
+          </div>
+
+          <div class="field">
+            <label for="loginLast4">4 Digit Terakhir No. Telepon</label>
+            <div class="input-wrap">
+              <span class="in-icon"><i class="fa-solid fa-mobile-screen-button"></i></span>
+              <input id="loginLast4" type="password" inputmode="numeric" maxlength="4" placeholder="••••" autocomplete="off" required>
+              <button type="button" id="togglePin" class="eye-btn" title="Tampilkan/Sembunyikan"><i class="fa-regular fa-eye"></i></button>
+            </div>
+          </div>
+
+          <p id="loginErr" class="err-banner hidden"></p>
+          <button id="loginBtn" type="submit" class="btn primary lg full">Masuk ke Dashboard <i class="fa-solid fa-arrow-right"></i></button>
+        </form>
+
+        <div id="savedAccountsBox" class="saved-accounts hidden">
+          <div class="saved-label">Akun terakhir tersimpan (klik untuk isi IC):</div>
+          <div id="savedAccountsList" class="chip-row"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast"></div>
+  <script src="/static/app.js?v=4"></script>
+</body>
+</html>
+

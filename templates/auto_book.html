@@ -1,0 +1,164 @@
+{% extends "base_app.html" %}
+
+{% block title %}Atur Auto-Book — LocumSync{% endblock %}
+
+{% block content %}
+<section id="page-auto-book">
+  <div class="panel-card">
+    <div class="section-header">
+      <div>
+        <h2>Antrian &amp; Jadwal Bot</h2>
+        <p class="muted small">Tersimpan di MySQL &amp; berjalan otomatis di background sesuai Waktu Malaysia.</p>
+      </div>
+      <div class="header-tools">
+        <button type="button" id="btnOpenJobModal" class="btn primary"><i class="fa-solid fa-plus"></i> Buat Jadwal Auto-Book</button>
+        <button type="button" id="btnRefreshJobs" class="btn soft sm"><i class="fa-solid fa-rotate-right"></i> Refresh</button>
+      </div>
+    </div>
+    <div id="jobsList" class="jobs-grid"></div>
+  </div>
+</section>
+{% endblock %}
+
+{% block modals %}
+<!-- LARGE MODAL: BUAT JADWAL AUTO-BOOK -->
+<div id="jobModalBack" class="modal-back hidden">
+  <div class="modal-card modal-lg">
+    <div class="modal-head">
+      <div>
+        <h2><i class="fa-solid fa-robot"></i> Buat Jadwal Auto-Book</h2>
+        <p class="muted small">Pilih target tanggal, prioritas jam shift, dan waktu mulai bot.</p>
+      </div>
+      <button type="button" id="btnCloseJobModal" class="icon-btn" title="Tutup">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+    </div>
+    <div class="modal-scroll">
+      <form id="jobForm" class="form-stack">
+        <div class="step-block">
+          <div class="step-badge">0</div>
+          <div class="step-body">
+            <label for="jobTitle">Nama Jadwal (opsional)</label>
+            <input id="jobTitle" type="text" placeholder="Contoh: Sniper 13 Des - Shift Malam">
+          </div>
+        </div>
+
+        <div class="step-block">
+          <div class="step-badge">1</div>
+          <div class="step-body">
+            <div class="label-row">
+              <label>Pilih Target Tanggal</label>
+              <div class="quick-links">
+                <button type="button" class="link-btn" id="btnPickAllDates">Pilih Semua</button>
+                <button type="button" class="link-btn" id="btnPickWeekend">Sab-Min</button>
+                <button type="button" class="link-btn" id="btnClearDates">Reset</button>
+              </div>
+            </div>
+            <button type="button" id="btnAuto30d" class="date-chip special">
+              <i class="fa-solid fa-moon"></i> Tanggal Baru Tengah Malam (+30 hari: <span id="autoNewDateTxt">-</span>)
+            </button>
+            <div id="pickerDates" class="date-picker-grid"></div>
+
+            <div class="future-section">
+              <div class="label-row">
+                <label class="future-lbl"><i class="fa-regular fa-calendar-plus"></i> Tanggal Mendatang (Belum Rilis — Auto Jam 00:00 MYT)</label>
+                <span class="muted small" id="futureRangeHint">Otomatis dijadwalkan pada H-30 pukul 00:00 MYT</span>
+              </div>
+              <div id="pickerFutureDates" class="date-picker-grid future"></div>
+              <div class="custom-date-row">
+                <input id="customFutureDate" type="date" aria-label="Tambah tanggal mendatang lainnya">
+                <button type="button" id="btnAddFutureDate" class="btn soft sm"><i class="fa-solid fa-plus"></i> Tambah Tanggal</button>
+              </div>
+            </div>
+
+            <p class="hint" id="selectedDatesHint">Belum dipilih = pantau SEMUA tanggal yang tersedia.</p>
+          </div>
+        </div>
+
+        <div class="step-block">
+          <div class="step-badge">2</div>
+          <div class="step-body">
+            <div class="label-row">
+              <label>Pilih Jam Shift (klik sesuai urutan prioritas)</label>
+              <button type="button" class="link-btn" id="btnClearSlots">Reset Jam</button>
+            </div>
+            <div id="pickerSlots" class="slot-picker-row"></div>
+            <p class="hint" id="selectedSlotsHint">Tidak dipilih = ambil jam mana saja yang kosong.</p>
+          </div>
+        </div>
+
+        <div class="step-block">
+          <div class="step-badge">3</div>
+          <div class="step-body">
+            <label>Waktu Mulai Bot</label>
+            <div class="mode-switch">
+              <button type="button" class="mode-btn active" data-mode="scheduled"><i class="fa-regular fa-clock"></i> Set Jam &amp; Menit</button>
+              <button type="button" class="mode-btn" data-mode="monitor"><i class="fa-solid fa-arrows-rotate"></i> Pantau Sekarang</button>
+            </div>
+
+            <div id="scheduledBox" class="sub-panel">
+              <div class="grid-3">
+                <div>
+                  <label for="schedTime">Jam &amp; Menit (Malaysia)</label>
+                  <input id="schedTime" type="time" value="00:00" step="60">
+                </div>
+                <div>
+                  <label for="schedTz">Zona Waktu</label>
+                  <select id="schedTz">
+                    <option value="MYT" selected>MYT (Malaysia UTC+8)</option>
+                    <option value="WIB">WIB (Lokal PC UTC+7)</option>
+                  </select>
+                </div>
+                <div>
+                  <label for="schedDate">Tanggal Jalan (opsional)</label>
+                  <input id="schedDate" type="date">
+                </div>
+              </div>
+              <button type="button" class="preset-btn" id="btnPresetMidnight">
+                <i class="fa-solid fa-moon"></i> Preset 12 Tengah Malam Malaysia (00:00 MYT = 23:00 WIB)
+              </button>
+              <div id="futureAutoBox" class="future-auto-box hidden">
+                <label class="toggle">
+                  <input type="checkbox" id="autoReleaseMidnight" checked>
+                  <span>Auto-jadwalkan tepat jam rilis masing-masing tanggal (H-30 pukul 00:00 MYT)</span>
+                </label>
+                <div id="futureAutoNote" class="muted small"></div>
+              </div>
+              <div class="preview-pill" id="schedPreview"></div>
+            </div>
+
+            <div id="monitorBox" class="sub-panel hidden">
+              <label for="pollInterval">Interval Cek Slot Kosong (detik)</label>
+              <input id="pollInterval" type="number" min="0.5" max="60" step="0.5" value="2">
+              <p class="hint">Bot langsung mengecek secara berkala dan otomatis booking jika ada slot batalan.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="step-block">
+          <div class="step-badge">4</div>
+          <div class="step-body">
+            <label>Opsi Tambahan</label>
+            <div class="switches inline-checks">
+              <label class="toggle">
+                <input type="checkbox" id="onePerDay">
+                <span>Maksimal 1 shift per hari</span>
+              </label>
+              <label class="toggle">
+                <input type="checkbox" id="dryRun">
+                <span>Mode Simulasi (Dry-Run, aman untuk testing demo)</span>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <div class="btn-row">
+          <button type="submit" class="btn primary lg" data-start="1"><i class="fa-solid fa-rocket"></i> Simpan &amp; Jalankan Bot</button>
+          <button type="button" id="btnSaveOnly" class="btn soft lg"><i class="fa-solid fa-floppy-disk"></i> Simpan Saja</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
+

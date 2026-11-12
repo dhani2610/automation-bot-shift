@@ -1,0 +1,24 @@
+{% extends "base_app.html" %}
+
+{% block title %}Jadwal &amp; Slot — LocumSync{% endblock %}
+
+{% block content %}
+<section id="page-jadwal">
+  <div class="section-header">
+    <div>
+      <h2>Jadwal &amp; Ketersediaan Slot</h2>
+      <p class="muted">Klik slot <b>OPEN</b> untuk booking langsung, atau klik <b>Atur Bot</b> pada tanggal pilihan Anda.</p>
+    </div>
+    <div class="header-tools">
+      <div class="segmented">
+        <button type="button" class="seg-btn active" data-sched-filter="all">Semua</button>
+        <button type="button" class="seg-btn" data-sched-filter="open">Ada OPEN</button>
+        <button type="button" class="seg-btn" data-sched-filter="booked">Sudah Book</button>
+      </div>
+      <button type="button" id="btnRefreshAll" class="btn soft sm"><i class="fa-solid fa-rotate-right"></i> Refresh</button>
+    </div>
+  </div>
+  <div id="scheduleGrid" class="schedule-grid"></div>
+</section>
+{% endblock %}
+
