@@ -436,7 +436,7 @@ class BotManager:
                     if has_direct_strike:
                         strike_pool = [client]
                         for _ in range(5):
-                            clone = self._client_factory()
+                            clone = LocumClient()
                             clone.session = client.session
                             clone._ic = client._ic
                             clone._last4 = client._last4
