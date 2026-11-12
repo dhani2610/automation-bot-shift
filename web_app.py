@@ -165,6 +165,8 @@ def api_watchdog_status(ic: str | None = Query(None)) -> dict[str, Any]:
                         "title": j["title"],
                         "status": j["status"],
                         "mode": j["mode"],
+                        "target_dates": j.get("target_dates") or [],
+                        "target_slots": j.get("target_slots") or [],
                         "schedule_date": j.get("schedule_date"),
                         "schedule_time": j.get("schedule_time"),
                         "schedule_tz": j.get("schedule_tz"),

@@ -6,6 +6,13 @@
   const PAGE = document.body.dataset.page || 'login';
   const CACHE_KEY = 'locum_dash_cache_v1';
   const DAY_NAMES_SHORT = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
+  const DEFAULT_SLOT_LABELS = {
+    '0900-1300': '9am – 1pm',
+    '1400-1800': '2pm – 6pm',
+    '1500-1900': '3pm – 7pm',
+    '1800-2200': '6pm – 10pm',
+    '1900-2300': '7pm – 11pm',
+  };
 
   const state = {
     ic: null,
@@ -38,6 +45,21 @@
     return String(v == null ? '' : v).replace(/[&<>"']/g, (c) => ({
       '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
     }[c]));
+  }
+
+  function formatDatesLabel(dates) {
+    return (dates && dates.length)
+      ? dates.map((d) => d === 'AUTO_30D' ? 'Baru(+30h)' : d).join(', ')
+      : 'Semua tanggal';
+  }
+
+  function formatSlotsLabel(slots) {
+    if (!slots || !slots.length) return 'Semua jam';
+    return slots.map((k) => {
+      const found = (state.uniqueSlots || []).find((s) => s.key === k);
+      const lbl = (found && found.label) || DEFAULT_SLOT_LABELS[k];
+      return lbl ? `${lbl} (${k})` : k;
+    }).join(' → ');
   }
 
   function setText(sel, val) {
@@ -767,10 +789,8 @@
         return;
       }
       el.innerHTML = state.jobs.map((j) => {
-        const datesTxt = (j.target_dates && j.target_dates.length)
-          ? j.target_dates.map((d) => d === 'AUTO_30D' ? 'Baru(+30h)' : d).join(', ')
-          : 'Semua tanggal';
-        const slotsTxt = (j.target_slots && j.target_slots.length) ? j.target_slots.join(' → ') : 'Semua jam';
+        const datesTxt = formatDatesLabel(j.target_dates);
+        const slotsTxt = formatSlotsLabel(j.target_slots);
         const timeInfo = j.mode === 'scheduled'
           ? `<i class="fa-regular fa-clock"></i> Jam ${esc((j.schedule_time || '').slice(0, 5))} ${esc(j.schedule_tz)}${j.schedule_date ? ` (${esc(j.schedule_date)})` : ''}`
           : `<i class="fa-solid fa-arrows-rotate"></i> Pantau tiap ${esc(j.poll_interval)}d`;
@@ -1197,10 +1217,8 @@
         banner.classList.add('hidden');
         return;
       }
-      const datesTxt = (job.target_dates && job.target_dates.length)
-        ? job.target_dates.map((d) => d === 'AUTO_30D' ? 'Baru(+30h)' : d).join(', ')
-        : 'Semua tanggal';
-      const slotsTxt = (job.target_slots && job.target_slots.length) ? job.target_slots.join(' → ') : 'Semua jam';
+      const datesTxt = formatDatesLabel(job.target_dates);
+      const slotsTxt = formatSlotsLabel(job.target_slots);
       const schedTxt = job.mode === 'scheduled'
         ? `Jam ${(job.schedule_time || '').slice(0, 5)} ${job.schedule_tz}${job.schedule_date ? ` (${job.schedule_date})` : ''}`
         : `Pantau tiap ${job.poll_interval}d`;
@@ -1426,6 +1444,8 @@
                   </div>
                   <div class="muted small">
                     Jadwal: ${esc(j.schedule_date || '-')} ${esc((j.schedule_time || '').slice(0, 5))} ${esc(j.schedule_tz || 'MYT')}
+                    · Target: <b>${esc(formatDatesLabel(j.target_dates))}</b>
+                    · Jam Shift: <b>${esc(formatSlotsLabel(j.target_slots))}</b>
                   </div>
                   ${j.last_message ? `<div class="muted small">${esc(j.last_message)}</div>` : ''}
                 </div>
