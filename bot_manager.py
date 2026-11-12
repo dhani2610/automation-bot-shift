@@ -270,9 +270,22 @@ class BotManager:
         try:
             self._execute_job(job, stop_event)
         except Exception as exc:  # pragma: no cover - defensive guard
-            msg = f"Error tak terduga pada bot: {exc}"
+            msg = f"Error tak terduga pada bot ({type(exc).__name__}): {exc}"
             self._safe_log(job_id, ic, "ERROR", msg)
             self._safe_status(job_id, "error", msg, clear_next_run=True)
+            account = db.get_account(ic) or {"ic_number": ic, "name": ic, "role": "MO", "workplace": "-"}
+            record_outcome_and_notify(
+                job_id=job_id,
+                account=account,
+                job_title=job.get("title") or f"Job #{job_id}",
+                mode=job.get("mode") or "scheduled",
+                outcome="FAILED",
+                slot_date=", ".join(job.get("target_dates") or []) or "SEMUA TANGGAL",
+                slot_key=", ".join(job.get("target_slots") or []) or "SEMUA JAM",
+                slot_label=", ".join(job.get("target_slots") or []) or "SEMUA JAM",
+                reason=msg,
+                is_dry_run=bool(job.get("dry_run")),
+            )
         finally:
             with self._lock:
                 self._workers.pop(job_id, None)
@@ -308,6 +321,9 @@ class BotManager:
         poll_interval = max(0.3, float(job["poll_interval"] or 2.0))
         slot_filters = [s.lower() for s in (job.get("target_slots") or [])] or None
 
+        account = db.get_account(ic) or {"ic_number": ic, "name": ic, "role": "MO", "workplace": "-"}
+        job_title = job.get("title") or f"Job #{job_id}"
+
         try:
             client = self._login_client(job_id, ic)
             bookings, _ = client.get_my_bookings()
@@ -315,10 +331,19 @@ class BotManager:
             msg = f"Gagal login/sinkronisasi awal: {exc}"
             self._safe_log(job_id, ic, "ERROR", msg)
             self._safe_status(job_id, "error", msg, clear_next_run=True)
+            record_outcome_and_notify(
+                job_id=job_id,
+                account=account,
+                job_title=job_title,
+                mode=mode,
+                outcome="FAILED",
+                slot_date=", ".join(job.get("target_dates") or []) or "SEMUA TANGGAL",
+                slot_key=", ".join(slot_filters or []) or "SEMUA JAM",
+                slot_label=", ".join(slot_filters or []) or "SEMUA JAM",
+                reason=msg,
+                is_dry_run=dry_run,
+            )
             return
-
-        account = db.get_account(ic) or {"ic_number": ic, "name": ic, "role": "MO", "workplace": "-"}
-        job_title = job.get("title") or f"Job #{job_id}"
         booked_keys = {(b["date"], b["slot"]) for b in bookings}
         booked_dates = {b["date"] for b in bookings}
         role_key = client.session.role_key if client.session else "mo"
@@ -393,8 +418,20 @@ class BotManager:
         run_booked = 0
         run_failed = 0
         checks = 0
+        last_avail_error: str | None = None
+        notify_threads: list[threading.Thread] = []
         snipe_end = (target_run_dt + dt.timedelta(seconds=120)) if mode == "scheduled" and target_run_dt else None
-        burst_end = (target_run_dt + dt.timedelta(seconds=20)) if mode == "scheduled" and target_run_dt else None
+        burst_end = (target_run_dt + dt.timedelta(seconds=30)) if mode == "scheduled" and target_run_dt else None
+
+        def notify_async(**kwargs: Any) -> None:
+            th = threading.Thread(
+                target=record_outcome_and_notify,
+                kwargs=kwargs,
+                daemon=True,
+                name=f"tg-notify-{job_id}",
+            )
+            th.start()
+            notify_threads.append(th)
 
         while not stop_event.is_set():
             if max_bookings > 0 and success_count >= max_bookings:
@@ -406,6 +443,7 @@ class BotManager:
             checks += 1
             try:
                 days = client.get_availability()
+                last_avail_error = None
                 matches = find_matching_slots(
                     days, role_key, booked_keys, booked_dates, target_dates, slot_filters, one_per_day
                 )
@@ -420,7 +458,7 @@ class BotManager:
                             run_booked += 1
                             booked_keys.add((date_str, slot_key))
                             booked_dates.add(date_str)
-                            record_outcome_and_notify(
+                            notify_async(
                                 job_id=job_id,
                                 account=account,
                                 job_title=job_title,
@@ -448,7 +486,7 @@ class BotManager:
                             run_booked += 1
                             booked_keys.add((date_str, slot_key))
                             booked_dates.add(date_str)
-                            record_outcome_and_notify(
+                            notify_async(
                                 job_id=job_id,
                                 account=account,
                                 job_title=job_title,
@@ -467,7 +505,7 @@ class BotManager:
                             self._safe_status(job_id, "running", msg, success_count=success_count)
                         except ApiError as book_exc:
                             run_failed += 1
-                            record_outcome_and_notify(
+                            notify_async(
                                 job_id=job_id,
                                 account=account,
                                 job_title=job_title,
@@ -485,6 +523,7 @@ class BotManager:
                     self._safe_log(job_id, ic, "INFO", hb)
                     self._safe_status(job_id, "running", hb)
             except ApiError as exc:
+                last_avail_error = str(exc)
                 err = f"Cek #{checks} gagal: {exc}"
                 self._safe_log(job_id, ic, "WARN", err)
                 self._safe_status(job_id, "running", err)
@@ -493,16 +532,22 @@ class BotManager:
                 break
             if mode == "scheduled":
                 in_burst = burst_end is not None and dt.datetime.now(burst_end.tzinfo) <= burst_end
-                wait_sec = 0.15 if in_burst else 0.4
+                wait_sec = 0.02 if in_burst else 0.25
             else:
                 wait_sec = poll_interval
             stop_event.wait(wait_sec)
+
+        for th in notify_threads:
+            th.join(timeout=10.0)
 
         if stop_event.is_set():
             self._safe_status(job_id, "stopped", f"Dihentikan oleh user (total booking: {success_count}).", clear_next_run=True)
             self._safe_log(job_id, ic, "WARN", f"Bot dihentikan oleh user. Total berhasil: {success_count}.")
         else:
             if run_booked == 0 and run_failed == 0:
+                no_slot_reason = f"Tidak ada slot kosong yang berhasil didapat setelah {checks} kali pengecekan."
+                if last_avail_error:
+                    no_slot_reason += f" Error API terakhir: {last_avail_error}"
                 record_outcome_and_notify(
                     job_id=job_id,
                     account=account,
@@ -512,7 +557,7 @@ class BotManager:
                     slot_date=dates_label,
                     slot_key=slots_label,
                     slot_label=slots_label,
-                    reason=f"Tidak ada slot kosong yang berhasil didapat setelah {checks} kali pengecekan.",
+                    reason=no_slot_reason,
                     is_dry_run=dry_run,
                 )
             done_msg = f"Selesai ({checks} cek). Total berhasil: {success_count}."
