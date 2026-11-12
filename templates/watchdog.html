@@ -28,22 +28,21 @@
     </div>
   </div>
 
-  <div class="two-col">
-    <div class="panel-card">
-      <div class="card-header">
-        <h2>Thread Scheduler Aktif (MySQL + RAM)</h2>
-        <p class="muted small">Memastikan setiap jadwal berstatus <code>waiting</code> / <code>running</code> memiliki thread aktif.</p>
-      </div>
-      <div id="wdActiveJobsList" class="stack-sm"></div>
+  <div class="panel-card" style="margin-bottom:16px">
+    <div class="card-header">
+      <h2>Thread Scheduler Aktif (MySQL + RAM)</h2>
+      <p class="muted small">Memastikan setiap jadwal berstatus <code>waiting</code> / <code>running</code> memiliki thread aktif.</p>
     </div>
+    <div id="wdActiveJobsList" class="stack-sm"></div>
+  </div>
 
-    <div class="panel-card">
-      <div class="card-header">
-        <h2>Log Crontab Watchdog (1 Menit)</h2>
-        <p class="muted small" id="wdCronPath">/var/log/locumsync-watchdog.log</p>
-      </div>
-      <div id="wdCronLogsBox" class="logs-box" style="max-height:320px"></div>
+  <div class="panel-card">
+    <div class="card-header">
+      <h2>Log Crontab Watchdog (1 Menit)</h2>
+      <p class="muted small" id="wdCronPath">/var/log/locumsync-watchdog.log</p>
     </div>
+    <div id="wdCronLogsBox" class="logs-box" style="max-height:380px"></div>
   </div>
 </section>
 {% endblock %}
+
