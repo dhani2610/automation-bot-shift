@@ -140,6 +140,67 @@ def page_telegram(request: Request) -> HTMLResponse:
     return templates.TemplateResponse(request, "telegram.html", {"page_name": "telegram", "active_page": "telegram"})
 
 
+@app.get("/watchdog", response_class=HTMLResponse)
+def page_watchdog(request: Request) -> HTMLResponse:
+    return templates.TemplateResponse(request, "watchdog.html", {"page_name": "watchdog", "active_page": "watchdog"})
+
+
+@app.get("/api/watchdog-status")
+def api_watchdog_status(ic: str | None = Query(None)) -> dict[str, Any]:
+    db_ok, db_msg = db.check_health()
+    now_wib = dt.datetime.now(WIB)
+    now_myt = dt.datetime.now(MYT)
+    snap = MANAGER.watchdog_snapshot()
+    live_ids = {w["job_id"] for w in snap["active_workers"] if w.get("alive")}
+
+    active_jobs_out: list[dict[str, Any]] = []
+    if db_ok:
+        try:
+            for j in db.list_active_jobs_all():
+                if ic and j.get("account_ic") != clean_digits(ic):
+                    continue
+                active_jobs_out.append(
+                    {
+                        "id": j["id"],
+                        "title": j["title"],
+                        "status": j["status"],
+                        "mode": j["mode"],
+                        "schedule_date": j.get("schedule_date"),
+                        "schedule_time": j.get("schedule_time"),
+                        "schedule_tz": j.get("schedule_tz"),
+                        "next_run_at": j.get("next_run_at"),
+                        "last_message": j.get("last_message"),
+                        "has_live_thread": int(j["id"]) in live_ids,
+                    }
+                )
+        except db.DatabaseError:
+            pass
+
+    cron_log_path = Path("/var/log/locumsync-watchdog.log")
+    cron_lines: list[str] = []
+    if cron_log_path.exists():
+        try:
+            cron_lines = cron_log_path.read_text(encoding="utf-8", errors="replace").splitlines()[-60:]
+            cron_lines.reverse()
+        except OSError:
+            cron_lines = []
+
+    return {
+        "ok": True,
+        "pid": os.getpid(),
+        "tz_env": os.environ.get("TZ", "system"),
+        "server_time_myt": now_myt.strftime("%Y-%m-%d %H:%M:%S"),
+        "server_time_wib": now_wib.strftime("%Y-%m-%d %H:%M:%S"),
+        "db_ok": db_ok,
+        "db_message": db_msg,
+        "watchdog": snap,
+        "active_db_jobs": active_jobs_out,
+        "cron_log_path": str(cron_log_path),
+        "cron_log_exists": cron_log_path.exists(),
+        "cron_logs": cron_lines,
+    }
+
+
 @app.get("/api/health")
 def api_health() -> dict[str, Any]:
     db_ok, db_msg = db.check_health()

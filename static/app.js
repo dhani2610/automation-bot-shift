@@ -1379,6 +1379,92 @@
     loadJobs();
   }
 
+  /* ---------- PAGE: WATCHDOG ---------- */
+  function initWatchdogPage() {
+    async function refreshWatchdog() {
+      try {
+        const res = await api(`/api/watchdog-status?ic=${encodeURIComponent(state.ic || '')}`);
+        const wd = res.watchdog || {};
+        setText('#wdServiceState', res.db_ok ? `OK (PID ${res.pid})` : 'DB OFFLINE');
+        setText('#wdThreadState', wd.watchdog_alive ? 'AKTIF (60d)' : 'MATI');
+        setText('#wdChecksCount', String(wd.checks_count || 0));
+        setText('#wdTzInfo', res.tz_env || 'MYT');
+
+        const badge = $('#wdLiveBadge');
+        if (badge) {
+          badge.className = `st-pill ${wd.watchdog_alive && res.db_ok ? 'st-running' : 'st-error'}`;
+          badge.innerHTML = wd.watchdog_alive
+            ? '<i class="fa-solid fa-circle-dot"></i> Live'
+            : '<i class="fa-solid fa-triangle-exclamation"></i> Cek Watchdog';
+        }
+
+        const banner = $('#wdMetaBanner');
+        if (banner) {
+          banner.innerHTML = `
+            <div>
+              <b><i class="fa-regular fa-clock"></i> Server MYT:</b> ${esc(res.server_time_myt)} ·
+              <b>WIB:</b> ${esc(res.server_time_wib)}
+              <div class="muted small">
+                Cek watchdog terakhir: <b>${esc(wd.last_check_myt || '-')} MYT</b> (${esc(wd.last_check_wib || '-')} WIB) ·
+                Interval: tiap ${esc(wd.interval_seconds || 60)} detik
+              </div>
+            </div>
+            <span class="st-pill st-waiting">${(res.active_db_jobs || []).length} Job Aktif</span>
+          `;
+        }
+
+        const jobsEl = $('#wdActiveJobsList');
+        if (jobsEl) {
+          const jobs = res.active_db_jobs || [];
+          jobsEl.innerHTML = jobs.length
+            ? jobs.map((j) => `
+              <div class="item-card">
+                <div style="min-width:0">
+                  <div>
+                    <span class="st-pill st-${esc(j.status)}">${esc(j.status)}</span>
+                    <b>#${esc(j.id)} — ${esc(j.title)}</b>
+                  </div>
+                  <div class="muted small">
+                    Jadwal: ${esc(j.schedule_date || '-')} ${esc((j.schedule_time || '').slice(0, 5))} ${esc(j.schedule_tz || 'MYT')}
+                  </div>
+                  ${j.last_message ? `<div class="muted small">${esc(j.last_message)}</div>` : ''}
+                </div>
+                <span class="st-pill ${j.has_live_thread ? 'st-running' : 'st-error'}">
+                  ${j.has_live_thread ? 'Thread Hidup' : 'Thread Mati'}
+                </span>
+              </div>
+            `).join('')
+            : '<p class="muted small">Tidak ada job berstatus waiting/running saat ini.</p>';
+        }
+
+        setText('#wdCronPath', res.cron_log_path || '/var/log/locumsync-watchdog.log');
+        const cronBox = $('#wdCronLogsBox');
+        if (cronBox) {
+          const lines = res.cron_logs || [];
+          if (!res.cron_log_exists) {
+            cronBox.innerHTML = '<p class="muted small">File log cron Linux belum ada (normal jika dijalankan di Windows lokal; di VPS terisi otomatis tiap 1 menit).</p>';
+          } else if (!lines.length) {
+            cronBox.innerHTML = '<p class="muted small">Menunggu cek cron menit berikutnya…</p>';
+          } else {
+            cronBox.innerHTML = lines.map((line) => {
+              const isErr = /unhealthy|error|restart|fail/i.test(line);
+              return `<div class="log-row ${isErr ? 'WARN' : 'INFO'}"><span>${esc(line)}</span></div>`;
+            }).join('');
+          }
+        }
+      } catch {
+        // ignore transient errors
+      }
+    }
+
+    const btn = $('#btnRefreshWatchdog');
+    if (btn) btn.onclick = () => { refreshWatchdog(); toast('Status monitor diperbarui.'); };
+
+    refreshWatchdog();
+    loadJobs();
+    return () => { refreshWatchdog(); loadJobs(); };
+  }
+
   /* ---------- Boot ---------- */
   checkHealth();
   tickClocks();
@@ -1398,6 +1484,7 @@
     else if (PAGE === 'auto_book') pollHook = initAutoBookPage();
     else if (PAGE === 'riwayat') pollHook = initRiwayatPage();
     else if (PAGE === 'logs') pollHook = initLogsPage();
+    else if (PAGE === 'watchdog') pollHook = initWatchdogPage();
     else if (PAGE === 'telegram') { initTelegramPage(); pollHook = () => loadJobs(); }
   }
 

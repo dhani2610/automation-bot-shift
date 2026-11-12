@@ -916,7 +916,7 @@ input:focus, select:focus {
   border-radius: 18px;
   box-shadow: 0 12px 30px rgba(15, 23, 42, 0.22);
   padding: 6px 4px;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(6, 1fr);
 }
 .mnav-btn {
   background: none;

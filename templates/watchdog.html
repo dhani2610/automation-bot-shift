@@ -1,0 +1,49 @@
+{% extends "base_app.html" %}
+
+{% block title %}Monitor 24/7 &amp; Crontab Watchdog — LocumSync{% endblock %}
+
+{% block content %}
+<section id="page-watchdog">
+  <div class="panel-card" style="margin-bottom:16px">
+    <div class="section-header">
+      <div>
+        <h2>Monitor Server, Scheduler &amp; Crontab 24/7</h2>
+        <p class="muted small">Auto-refresh realtime setiap 3 detik untuk memastikan bot tetap berjalan di background meski browser ditutup.</p>
+      </div>
+      <div class="header-tools">
+        <span id="wdLiveBadge" class="st-pill st-running"><i class="fa-solid fa-circle-dot"></i> Live</span>
+        <button type="button" id="btnRefreshWatchdog" class="btn soft sm"><i class="fa-solid fa-rotate-right"></i> Refresh</button>
+      </div>
+    </div>
+
+    <div class="stats-row" id="wdSummaryCards">
+      <div class="stat-box"><b id="wdServiceState">-</b><small>Service &amp; DB</small></div>
+      <div class="stat-box ok"><b id="wdThreadState">-</b><small>Watchdog 60d</small></div>
+      <div class="stat-box brand"><b id="wdChecksCount">0</b><small>Total Cek Watchdog</small></div>
+      <div class="stat-box"><b id="wdTzInfo">-</b><small>Zona Waktu Service</small></div>
+    </div>
+
+    <div id="wdMetaBanner" class="log-sched-banner" style="margin-top:12px">
+      <div>Memuat status scheduler…</div>
+    </div>
+  </div>
+
+  <div class="two-col">
+    <div class="panel-card">
+      <div class="card-header">
+        <h2>Thread Scheduler Aktif (MySQL + RAM)</h2>
+        <p class="muted small">Memastikan setiap jadwal berstatus <code>waiting</code> / <code>running</code> memiliki thread aktif.</p>
+      </div>
+      <div id="wdActiveJobsList" class="stack-sm"></div>
+    </div>
+
+    <div class="panel-card">
+      <div class="card-header">
+        <h2>Log Crontab Watchdog (1 Menit)</h2>
+        <p class="muted small" id="wdCronPath">/var/log/locumsync-watchdog.log</p>
+      </div>
+      <div id="wdCronLogsBox" class="logs-box" style="max-height:320px"></div>
+    </div>
+  </div>
+</section>
+{% endblock %}

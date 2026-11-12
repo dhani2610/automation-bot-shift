@@ -106,12 +106,17 @@ class TestBotManagerAndWeb(unittest.TestCase):
                 ("/auto-book", 'id="page-auto-book"'),
                 ("/riwayat", 'id="page-riwayat"'),
                 ("/logs", 'id="page-logs"'),
+                ("/watchdog", 'id="page-watchdog"'),
                 ("/telegram", 'id="page-telegram"'),
             ]:
                 rp = client.get(path)
                 self.assertEqual(rp.status_code, 200, f"Route {path} failed")
                 self.assertIn("LocumSync", rp.text)
                 self.assertIn(needle, rp.text)
+
+            r_wd = client.get("/api/watchdog-status?ic=910725065438")
+            self.assertEqual(r_wd.status_code, 200)
+            self.assertTrue(r_wd.json()["ok"])
 
             r_logout = client.post("/api/logout")
             self.assertEqual(r_logout.status_code, 200)

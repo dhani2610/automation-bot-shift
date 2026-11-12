@@ -153,6 +153,11 @@ class BotManager:
         self._workers: dict[int, tuple[threading.Thread, threading.Event]] = {}
         self._watchdog_stop = threading.Event()
         self._watchdog_thread: threading.Thread | None = None
+        self._watchdog_interval: float = 60.0
+        self._watchdog_checks: int = 0
+        self._watchdog_last_myt: str | None = None
+        self._watchdog_last_wib: str | None = None
+        self._watchdog_last_resumed: list[int] = []
 
     def is_active(self, job_id: int) -> bool:
         with self._lock:
@@ -220,13 +225,25 @@ class BotManager:
             if self._watchdog_thread and self._watchdog_thread.is_alive():
                 return
             self._watchdog_stop.clear()
+            self._watchdog_interval = interval_seconds
+
+            def _record_tick(resumed_ids: list[int]) -> None:
+                now_myt = dt.datetime.now(MYT)
+                now_wib = now_myt.astimezone(WIB)
+                self._watchdog_checks += 1
+                self._watchdog_last_myt = now_myt.strftime("%Y-%m-%d %H:%M:%S")
+                self._watchdog_last_wib = now_wib.strftime("%Y-%m-%d %H:%M:%S")
+                self._watchdog_last_resumed = resumed_ids
+
+            _record_tick([])
 
             def _loop() -> None:
                 while not self._watchdog_stop.wait(interval_seconds):
                     try:
-                        self.resume_active_jobs()
+                        resumed_ids = self.resume_active_jobs()
+                        _record_tick(resumed_ids)
                     except Exception:
-                        pass
+                        _record_tick([])
 
             self._watchdog_thread = threading.Thread(
                 target=_loop,
@@ -234,6 +251,28 @@ class BotManager:
                 name="bot-watchdog",
             )
             self._watchdog_thread.start()
+
+    def watchdog_snapshot(self) -> dict[str, Any]:
+        """Return live state of the in-process 60s watchdog and active worker threads."""
+        with self._lock:
+            wd_alive = bool(self._watchdog_thread and self._watchdog_thread.is_alive())
+            workers = [
+                {
+                    "job_id": jid,
+                    "thread_name": th.name,
+                    "alive": th.is_alive(),
+                }
+                for jid, (th, _) in sorted(self._workers.items())
+            ]
+        return {
+            "watchdog_alive": wd_alive,
+            "interval_seconds": self._watchdog_interval,
+            "checks_count": self._watchdog_checks,
+            "last_check_myt": self._watchdog_last_myt,
+            "last_check_wib": self._watchdog_last_wib,
+            "last_resumed": list(self._watchdog_last_resumed),
+            "active_workers": workers,
+        }
 
     def _safe_log(self, job_id: int, account_ic: str, level: str, message: str) -> None:
         try:
