@@ -1293,15 +1293,18 @@
           box.innerHTML = '<p class="muted">Belum ada log untuk scheduler ini.</p>';
           return;
         }
-        box.innerHTML = res.logs.map((l, idx) => `
+        box.innerHTML = res.logs.map((l, idx) => {
+          const hasSnapshot = !!l.raw_payload;
+          return `
           <div class="log-row ${esc(l.level)}" style="align-items:center;">
             <span class="log-ts">[${esc(l.created_at)}]</span>
             <span class="log-lvl">${esc(l.level)}</span>
             ${(jobId === 'ALL' && l.job_title) ? `<span class="badge">#${esc(l.job_id)} ${esc(l.job_title)}</span>` : ''}
             <span style="flex:1; min-width:0;">${esc(l.message)}</span>
-            <button type="button" class="btn soft sm btn-log-inspect" data-idx="${idx}" style="padding:3px 8px; font-size:11px; margin-left:auto;" title="Lihat JSON API & Analisa Respon Server"><i class="fa-solid fa-eye"></i> JSON</button>
+            ${hasSnapshot ? `<button type="button" class="btn soft sm btn-log-inspect" data-idx="${idx}" style="padding:3px 8px; font-size:11px; margin-left:auto; color:var(--primary); font-weight:600;" title="Buka Snapshot JSON Asli yang Tersimpan Saat Cek Ini"><i class="fa-solid fa-eye"></i> Snapshot</button>` : ''}
           </div>
-        `).join('');
+        `;
+        }).join('');
 
         $$('.btn-log-inspect', box).forEach((btn) => {
           btn.onclick = async () => {
@@ -1341,6 +1344,12 @@
           try { savedPayload = JSON.parse(logItem.raw_payload); } catch {}
         }
 
+        // Jika logItem ada tapi TIDAK punya snapshot tersimpan, jangan fetch ke API
+        if (logItem && !savedPayload) {
+          toast('Baris log ini tidak memiliki rekaman snapshot JSON (hanya log info status).');
+          return;
+        }
+
         const selJob = state.jobs.find((j) => String(j.id) === String(state.logJobId));
         let targetDate = (selJob && selJob.target_dates && selJob.target_dates.length)
           ? selJob.target_dates[0]
@@ -1350,7 +1359,6 @@
           if (matchDate) targetDate = matchDate[0];
         }
 
-        // Jika log punya rekaman raw_payload saat kejadian itu, tampilkan langsung payload snapshot tersebut
         let res = null;
         let jsonText = '';
         let isHistorical = false;
@@ -1360,6 +1368,7 @@
           jsonText = JSON.stringify(res, null, 2);
           isHistorical = true;
         } else {
+          // Hanya tombol header atas ("Cek JSON API Asli") yang melakukan live fetch
           res = await api(`/api/inspect-raw?ic=${encodeURIComponent(state.ic)}&target_date=${encodeURIComponent(targetDate)}`);
           jsonText = JSON.stringify(res, null, 2);
         }
