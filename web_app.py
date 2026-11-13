@@ -605,6 +605,56 @@ def api_delete_job(job_id: int, ic: str = Query(...)) -> dict[str, Any]:
     return {"ok": True}
 
 
+@app.get("/api/inspect-raw")
+def api_inspect_raw(
+    ic: str = Query(...),
+    target_date: str | None = Query(default=None),
+) -> dict[str, Any]:
+    client, acc = _get_authed_client(ic)
+    now_myt = dt.datetime.now(MYT).strftime("%Y-%m-%d %H:%M:%S MYT")
+    try:
+        t0 = dt.datetime.now()
+        days = client.get_availability()
+        t1 = dt.datetime.now()
+        avail_ms = (t1 - t0).total_seconds() * 1000.0
+
+        t2 = dt.datetime.now()
+        bookings, cutoff = client.get_my_bookings()
+        t3 = dt.datetime.now()
+        mine_ms = (t3 - t2).total_seconds() * 1000.0
+    except ApiError as exc:
+        raise HTTPException(status_code=502, detail=f"Gagal mengambil respon server: {exc}") from exc
+
+    filter_day = None
+    if target_date:
+        for d in days:
+            if d.get("date") == target_date:
+                filter_day = d
+                break
+
+    return {
+        "ok": True,
+        "server_time_myt": now_myt,
+        "account": {
+            "ic": acc.get("ic_number"),
+            "name": acc.get("name"),
+            "role": acc.get("role"),
+            "role_key": client.session.role_key if client.session else "mo",
+        },
+        "target_date": target_date,
+        "target_day_json": filter_day,
+        "latency_ms": {
+            "availability": round(avail_ms, 1),
+            "mine": round(mine_ms, 1),
+        },
+        "total_days": len(days),
+        "days_preview": days[:2] + days[-3:] if len(days) > 5 else days,
+        "my_bookings": bookings,
+        "cutoff_hours": cutoff,
+        "full_availability": days,
+    }
+
+
 @app.get("/api/logs")
 def api_logs(
     ic: str = Query(...),
