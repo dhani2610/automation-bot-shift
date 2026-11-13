@@ -164,6 +164,7 @@ def init_db() -> None:
                 """
             )
             _ensure_booking_results_columns(cur)
+            _ensure_bot_logs_columns(cur)
             cur.execute(
                 """
                 CREATE TABLE IF NOT EXISTS `bot_logs` (
@@ -172,12 +173,23 @@ def init_db() -> None:
                   `account_ic` VARCHAR(12) NULL,
                   `level` ENUM('INFO', 'SUCCESS', 'WARN', 'ERROR') NOT NULL DEFAULT 'INFO',
                   `message` TEXT NOT NULL,
+                  `raw_payload` MEDIUMTEXT NULL,
                   `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
                   INDEX `idx_logs_job_id` (`job_id`, `id`),
                   INDEX `idx_logs_ic_id` (`account_ic`, `id`)
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
                 """
             )
+
+
+def _ensure_bot_logs_columns(cur: Any) -> None:
+    """Safely add raw_payload column to bot_logs table if missing."""
+    try:
+        cur.execute("SHOW COLUMNS FROM `bot_logs` LIKE 'raw_payload'")
+        if not cur.fetchone():
+            cur.execute("ALTER TABLE `bot_logs` ADD COLUMN `raw_payload` MEDIUMTEXT NULL AFTER `message`")
+    except Exception:
+        pass
 
 
 def _ensure_booking_results_columns(cur: Any) -> None:
@@ -556,12 +568,18 @@ def upsert_telegram_settings(
     return get_telegram_settings(account_ic)
 
 
-def add_log(job_id: int | None, account_ic: str | None, level: str, message: str) -> None:
+def add_log(
+    job_id: int | None,
+    account_ic: str | None,
+    level: str,
+    message: str,
+    raw_payload: str | None = None,
+) -> None:
     with get_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(
-                "INSERT INTO `bot_logs` (`job_id`, `account_ic`, `level`, `message`) VALUES (%s, %s, %s, %s)",
-                (job_id, account_ic, level, message),
+                "INSERT INTO `bot_logs` (`job_id`, `account_ic`, `level`, `message`, `raw_payload`) VALUES (%s, %s, %s, %s, %s)",
+                (job_id, account_ic, level, message, raw_payload),
             )
 
 

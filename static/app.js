@@ -1336,6 +1336,11 @@
         topBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Mengambil data…';
       }
       try {
+        let savedPayload = null;
+        if (logItem && logItem.raw_payload) {
+          try { savedPayload = JSON.parse(logItem.raw_payload); } catch {}
+        }
+
         const selJob = state.jobs.find((j) => String(j.id) === String(state.logJobId));
         let targetDate = (selJob && selJob.target_dates && selJob.target_dates.length)
           ? selJob.target_dates[0]
@@ -1345,14 +1350,28 @@
           if (matchDate) targetDate = matchDate[0];
         }
 
-        const res = await api(`/api/inspect-raw?ic=${encodeURIComponent(state.ic)}&target_date=${encodeURIComponent(targetDate)}`);
-        const jsonText = JSON.stringify(res, null, 2);
+        // Jika log punya rekaman raw_payload saat kejadian itu, tampilkan langsung payload snapshot tersebut
+        let res = null;
+        let jsonText = '';
+        let isHistorical = false;
+
+        if (savedPayload) {
+          res = savedPayload;
+          jsonText = JSON.stringify(res, null, 2);
+          isHistorical = true;
+        } else {
+          res = await api(`/api/inspect-raw?ic=${encodeURIComponent(state.ic)}&target_date=${encodeURIComponent(targetDate)}`);
+          jsonText = JSON.stringify(res, null, 2);
+        }
+
         const modalHtml = `
           <div style="font-size:13px; line-height:1.5;">
             ${logItem ? `<div style="background:var(--surface-2); border:1px solid var(--line); border-radius:8px; padding:10px; margin-bottom:12px;">
               <b>Log yang Diinspeksi:</b>
               <div class="muted small" style="margin-top:2px;">[${esc(logItem.created_at)}] <b>${esc(logItem.level)}</b>: ${esc(logItem.message)}</div>
+              ${isHistorical ? '<span class="badge" style="background:#10b981; color:#fff; margin-top:6px; display:inline-block;">✓ Snapshot JSON Asli Tersimpan Saat Kejadian Ini</span>' : '<span class="badge" style="margin-top:6px; display:inline-block;">Live Return (Baru Di-fetch)</span>'}
             </div>` : ''}
+            ${!isHistorical ? `
             <div style="margin-bottom:10px; display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
               <span class="badge">Waktu Server: ${esc(res.server_time_myt)}</span>
               <span class="badge">Akun: ${esc(res.account?.name)} (${esc(res.account?.role)})</span>
@@ -1367,14 +1386,15 @@
               : `<div style="background:rgba(239,68,68,0.1); border:1px solid rgba(239,68,68,0.3); border-radius:8px; padding:10px; margin-bottom:12px; color:#ef4444;">
                    <b>Target Tanggal ${esc(res.target_date)} belum muncul di server</b> (artinya slot tanggal ini belum dibuka sebelum 00:00 MYT).
                  </div>`}
+            ` : ''}
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-              <b>Format JSON Lengkap dari Server Locum:</b>
+              <b>${isHistorical ? 'JSON Snapshot Kondisi Saat Cek Ini:' : 'Format JSON Lengkap dari Server Locum:'}</b>
               <button type="button" class="btn soft sm" id="btnCopyJson"><i class="fa-solid fa-copy"></i> Salin JSON</button>
             </div>
-            <pre id="rawJsonBox" style="background:var(--bg); border:1px solid var(--line); border-radius:8px; padding:12px; max-height:360px; overflow:auto; font-family:monospace; font-size:11px; white-space:pre-wrap; word-break:break-all;">${esc(jsonText)}</pre>
+            <pre id="rawJsonBox" style="background:var(--bg); border:1px solid var(--line); border-radius:8px; padding:12px; max-height:360px; overflow-y:auto; font-family:monospace; font-size:11px; white-space:pre-wrap; word-break:break-all;">${esc(jsonText)}</pre>
           </div>
         `;
-        openModal('Bukti JSON API Server Locum (Live Return)', modalHtml, null, 'Tutup', false, true);
+        openModal(isHistorical ? 'Snapshot JSON API Tersimpan (Kondisi Saat Itu)' : 'Bukti JSON API Server Locum (Live Return)', modalHtml, null, 'Tutup', false, true);
         const copyBtn = $('#btnCopyJson');
         if (copyBtn) {
           copyBtn.onclick = () => {

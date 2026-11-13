@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime as dt
+import json
 import threading
 import time
 from typing import Any
@@ -277,9 +278,16 @@ class BotManager:
             "active_workers": workers,
         }
 
-    def _safe_log(self, job_id: int, account_ic: str, level: str, message: str) -> None:
+    def _safe_log(
+        self,
+        job_id: int,
+        account_ic: str,
+        level: str,
+        message: str,
+        raw_payload: str | None = None,
+    ) -> None:
         try:
-            db.add_log(job_id, account_ic, level, message)
+            db.add_log(job_id, account_ic, level, message, raw_payload=raw_payload)
         except db.DatabaseError:
             pass
 
@@ -575,7 +583,8 @@ class BotManager:
                         is_dry_run=False,
                     )
                     msg = f"BERHASIL BOOKING (Direct-Strike {delta_ms:+.0f}ms)! {date_str} | {slot_label} | Seat {seat} | Ref {ref_id}"
-                    self._safe_log(job_id, ic, "SUCCESS", msg)
+                    strike_snap = json.dumps({"strike": True, "delta_ms": round(delta_ms, 1), "date": date_str, "slot": slot_key, "booking": booking}, ensure_ascii=False)
+                    self._safe_log(job_id, ic, "SUCCESS", msg, raw_payload=strike_snap)
                     self._safe_status(job_id, "running", msg, success_count=success_count)
 
                 wave_threads: list[threading.Thread] = []
@@ -672,7 +681,8 @@ class BotManager:
                                 is_dry_run=False,
                             )
                             msg = f"BERHASIL BOOKING! {date_str} | {slot_label} | Seat {seat} | Ref {ref_id}"
-                            self._safe_log(job_id, ic, "SUCCESS", msg)
+                            book_snap = json.dumps({"date": date_str, "slot": slot_key, "booking": booking}, ensure_ascii=False)
+                            self._safe_log(job_id, ic, "SUCCESS", msg, raw_payload=book_snap)
                             self._safe_status(job_id, "running", msg, success_count=success_count)
                         except ApiError as book_exc:
                             run_failed += 1
@@ -688,15 +698,32 @@ class BotManager:
                                 reason=str(book_exc),
                                 is_dry_run=False,
                             )
-                            self._safe_log(job_id, ic, "WARN", f"Gagal booking {date_str} ({slot_key}): {book_exc}")
+                            err_snap = json.dumps({"date": date_str, "slot": slot_key, "error": str(book_exc)}, ensure_ascii=False)
+                            self._safe_log(job_id, ic, "WARN", f"Gagal booking {date_str} ({slot_key}): {book_exc}", raw_payload=err_snap)
                 elif checks == 1 or checks % 10 == 0:
                     hb = f"Cek #{checks}: Belum ada slot kosong untuk target ({dates_label})."
-                    self._safe_log(job_id, ic, "INFO", hb)
+                    target_day_data = None
+                    if target_dates:
+                        for d in days:
+                            if d.get("date") in target_dates:
+                                target_day_data = d
+                                break
+                    snap_dict = {
+                        "check_num": checks,
+                        "checked_at_myt": dt.datetime.now(MYT).strftime("%Y-%m-%d %H:%M:%S MYT"),
+                        "target_dates": sorted(list(target_dates)) if target_dates else [],
+                        "target_slots": slot_filters or [],
+                        "target_day": target_day_data,
+                        "total_days_returned": len(days),
+                    }
+                    raw_str = json.dumps(snap_dict, ensure_ascii=False)
+                    self._safe_log(job_id, ic, "INFO", hb, raw_payload=raw_str)
                     self._safe_status(job_id, "running", hb)
             except ApiError as exc:
                 last_avail_error = str(exc)
                 err = f"Cek #{checks} gagal: {exc}"
-                self._safe_log(job_id, ic, "WARN", err)
+                err_snap = json.dumps({"check_num": checks, "error": str(exc)}, ensure_ascii=False)
+                self._safe_log(job_id, ic, "WARN", err, raw_payload=err_snap)
                 self._safe_status(job_id, "running", err)
 
             if max_bookings > 0 and success_count >= max_bookings:
