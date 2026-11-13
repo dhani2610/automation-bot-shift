@@ -386,14 +386,151 @@
     if (btnLogout) btnLogout.onclick = logout;
     if (btnLogoutMob) btnLogoutMob.onclick = logout;
 
+    // Security Modal Handler
+    const modalSec = $('#modalSecurity');
+    async function openSecurityModal() {
+      if (!modalSec) return;
+      $('#secCurrentPassword').value = '';
+      $('#secNewUsername').value = '';
+      $('#secNewPassword').value = '';
+      $('#secConfirmPassword').value = '';
+      try {
+        const res = await api('/api/gate/me');
+        $('#secCurrentUsername').value = res.username || 'admin';
+      } catch {
+        $('#secCurrentUsername').value = 'admin';
+      }
+      modalSec.classList.remove('hidden');
+      $('#secCurrentPassword').focus();
+    }
+
+    const btnOpenSec = $('#btnOpenSecurity');
+    if (btnOpenSec) btnOpenSec.onclick = openSecurityModal;
+    const btnOpenSecMob = $('#btnOpenSecurityMob');
+    if (btnOpenSecMob) btnOpenSecMob.onclick = openSecurityModal;
+
+    const btnCloseSec = $('#btnCloseSecurity');
+    if (btnCloseSec) btnCloseSec.onclick = () => modalSec && modalSec.classList.add('hidden');
+    const btnCancelSec = $('#btnCancelSecurity');
+    if (btnCancelSec) btnCancelSec.onclick = () => modalSec && modalSec.classList.add('hidden');
+
+    const formSec = $('#formSecurity');
+    if (formSec) {
+      formSec.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const curUser = $('#secCurrentUsername').value;
+        const curPass = $('#secCurrentPassword').value;
+        const newUser = $('#secNewUsername').value.trim();
+        const newPass = $('#secNewPassword').value;
+        const confirmPass = $('#secConfirmPassword').value;
+
+        if (!curPass) {
+          toast('Password saat ini wajib diisi.');
+          return;
+        }
+        if (newPass && newPass !== confirmPass) {
+          toast('Konfirmasi password baru tidak cocok.');
+          return;
+        }
+        if (newPass && newPass.length < 5) {
+          toast('Password baru minimal 5 karakter.');
+          return;
+        }
+        if (!newUser && !newPass) {
+          toast('Tidak ada username atau password baru yang diisi.');
+          return;
+        }
+
+        const btnSave = $('#btnSaveSecurity');
+        btnSave.disabled = true;
+        btnSave.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Menyimpan…';
+        try {
+          const res = await api('/api/gate/change-credentials', {
+            method: 'POST',
+            body: JSON.stringify({
+              current_username: curUser,
+              current_password: curPass,
+              new_username: newUser,
+              new_password: newPass,
+            }),
+          });
+          toast(`Kredensial portal berhasil diperbarui sebagai '${res.username}'!`);
+          modalSec.classList.add('hidden');
+        } catch (err) {
+          toast(err.message || 'Gagal mengubah kredensial portal.');
+        } finally {
+          btnSave.disabled = false;
+          btnSave.innerHTML = '<i class="fa-solid fa-check"></i> Simpan Perubahan';
+        }
+      });
+    }
+
     bindGlobalModalEvents();
     restoreCache(profile.ic);
     updateKpis();
     return true;
   }
 
+  /* ---------- PAGE: GATE ---------- */
+  function initGatePage() {
+    const togglePw = $('#toggleGatePw');
+    if (togglePw) {
+      togglePw.onclick = () => {
+        const inp = $('#gatePass');
+        const show = inp.type === 'password';
+        inp.type = show ? 'text' : 'password';
+        togglePw.innerHTML = show
+          ? '<i class="fa-regular fa-eye-slash"></i>'
+          : '<i class="fa-regular fa-eye"></i>';
+      };
+    }
+
+    const form = $('#gateForm');
+    if (form) {
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const errEl = $('#gateErr');
+        const btn = $('#btnGateLogin');
+        errEl.classList.add('hidden');
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Memeriksa…';
+        try {
+          await api('/api/gate/login', {
+            method: 'POST',
+            body: JSON.stringify({
+              username: $('#gateUser').value,
+              password: $('#gatePass').value,
+            }),
+          });
+          toast('Autentikasi portal berhasil!');
+          window.location.href = '/login';
+        } catch (err) {
+          errEl.textContent = err.message || 'Login portal gagal.';
+          errEl.classList.remove('hidden');
+        } finally {
+          btn.disabled = false;
+          btn.innerHTML = 'Masuk Portal <i class="fa-solid fa-arrow-right"></i>';
+        }
+      });
+    }
+  }
+
   /* ---------- PAGE: LOGIN ---------- */
   function initLoginPage() {
+    const btnLock = $('#btnLockPortal');
+    if (btnLock) {
+      btnLock.onclick = async () => {
+        try {
+          await api('/api/gate/logout', { method: 'POST' });
+          localStorage.removeItem('locum_dash_user');
+          sessionStorage.removeItem(CACHE_KEY);
+          window.location.href = '/gate';
+        } catch {
+          window.location.href = '/gate';
+        }
+      };
+    }
+
     async function loadSavedAccounts() {
       try {
         const res = await api('/api/accounts');
@@ -1603,7 +1740,9 @@
   setInterval(tickClocks, 1000);
 
   let pollHook = null;
-  if (PAGE === 'login') {
+  if (PAGE === 'gate') {
+    initGatePage();
+  } else if (PAGE === 'login') {
     let saved = null;
     try { saved = JSON.parse(localStorage.getItem('locum_dash_user')); } catch { saved = null; }
     if (saved && saved.profile && saved.profile.ic) {

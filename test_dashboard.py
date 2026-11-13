@@ -96,6 +96,13 @@ class TestBotManagerAndWeb(unittest.TestCase):
             patch("web_app.MANAGER.resume_active_jobs", return_value=[]),
         ):
             client = TestClient(web_app.app)
+            r_unauth = client.get("/")
+            self.assertEqual(r_unauth.status_code, 200)
+            self.assertIn('data-page="gate"', r_unauth.text)
+
+            # Authenticate via gate token
+            client.cookies.set("gate_token", web_app.make_gate_token("admin"))
+
             r_home = client.get("/")
             self.assertEqual(r_home.status_code, 200)
             self.assertIn("LocumSync", r_home.text)

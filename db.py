@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import datetime as dt
+import hashlib
+import hmac
 import json
 import os
+import secrets
 from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Any, Iterator
@@ -180,6 +183,19 @@ def init_db() -> None:
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
                 """
             )
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS `app_users` (
+                  `id` INT AUTO_INCREMENT PRIMARY KEY,
+                  `username` VARCHAR(60) NOT NULL UNIQUE,
+                  `password_hash` VARCHAR(255) NOT NULL,
+                  `salt` VARCHAR(64) NOT NULL,
+                  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                  `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+                """
+            )
+            _ensure_default_app_user(cur)
 
 
 def _ensure_bot_logs_columns(cur: Any) -> None:
@@ -216,6 +232,107 @@ def _ensure_booking_results_columns(cur: Any) -> None:
         "MODIFY COLUMN `slot_key` VARCHAR(120) NOT NULL, "
         "MODIFY COLUMN `slot_label` VARCHAR(120) NULL"
     )
+
+
+def _hash_password(password: str, salt: str | None = None) -> tuple[str, str]:
+    if not salt:
+        salt = secrets.token_hex(16)
+    hashed = hashlib.sha256((salt + password).encode("utf-8")).hexdigest()
+    return hashed, salt
+
+
+def _verify_password(password: str, hashed: str, salt: str) -> bool:
+    check = hashlib.sha256((salt + password).encode("utf-8")).hexdigest()
+    return hmac.compare_digest(check, hashed)
+
+
+def _ensure_default_app_user(cur: Any) -> None:
+    try:
+        cur.execute("SELECT COUNT(*) AS cnt FROM `app_users`")
+        row = cur.fetchone()
+        if not row or int(row.get("cnt") or 0) == 0:
+            pw_hash, salt = _hash_password("admin123")
+            cur.execute(
+                "INSERT INTO `app_users` (`username`, `password_hash`, `salt`) VALUES (%s, %s, %s)",
+                ("admin", pw_hash, salt),
+            )
+    except Exception:
+        pass
+
+
+def verify_app_user(username: str, password: str) -> dict[str, Any] | None:
+    username = (username or "").strip()
+    password = (password or "").strip()
+    if not username or not password:
+        return None
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT `id`, `username`, `password_hash`, `salt` FROM `app_users` WHERE `username` = %s LIMIT 1",
+                (username,),
+            )
+            row = cur.fetchone()
+            if not row:
+                return None
+            if _verify_password(password, row["password_hash"], row["salt"]):
+                return {"id": row["id"], "username": row["username"]}
+            return None
+
+
+def get_first_app_user() -> dict[str, Any] | None:
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT `id`, `username` FROM `app_users` ORDER BY `id` ASC LIMIT 1")
+            return cur.fetchone()
+
+
+def update_app_credentials(
+    current_username: str,
+    current_password: str,
+    new_username: str | None = None,
+    new_password: str | None = None,
+) -> dict[str, Any]:
+    current_username = (current_username or "").strip()
+    current_password = (current_password or "").strip()
+    if not current_username or not current_password:
+        raise DatabaseError("Username dan password saat ini wajib diisi.")
+
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT `id`, `username`, `password_hash`, `salt` FROM `app_users` WHERE `username` = %s LIMIT 1",
+                (current_username,),
+            )
+            row = cur.fetchone()
+            if not row or not _verify_password(current_password, row["password_hash"], row["salt"]):
+                raise DatabaseError("Password saat ini salah.")
+
+            user_id = row["id"]
+            final_username = current_username
+            if new_username and new_username.strip():
+                cand = new_username.strip()
+                if cand != current_username:
+                    cur.execute("SELECT `id` FROM `app_users` WHERE `username` = %s AND `id` != %s", (cand, user_id))
+                    if cur.fetchone():
+                        raise DatabaseError(f"Username '{cand}' sudah digunakan.")
+                    final_username = cand
+
+            if new_password and new_password.strip():
+                if len(new_password.strip()) < 5:
+                    raise DatabaseError("Password baru minimal 5 karakter.")
+                pw_hash, salt = _hash_password(new_password.strip())
+                cur.execute(
+                    "UPDATE `app_users` SET `username` = %s, `password_hash` = %s, `salt` = %s WHERE `id` = %s",
+                    (final_username, pw_hash, salt, user_id),
+                )
+            else:
+                cur.execute(
+                    "UPDATE `app_users` SET `username` = %s WHERE `id` = %s",
+                    (final_username, user_id),
+                )
+
+        conn.commit()
+    return {"id": user_id, "username": final_username}
 
 
 def check_health() -> tuple[bool, str]:

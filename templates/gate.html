@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="id" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#4f46e5">
+  <title>Portal Access — LocumSync</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
+  <link rel="stylesheet" href="/static/style.css?v=8">
+</head>
+<body data-page="gate">
+  <div class="auth-shell">
+    <div class="auth-topbar">
+      <div class="brand-mark">
+        <div class="logo-badge"><i class="fa-solid fa-shield-halved"></i></div>
+        <div>
+          <span class="brand-title">LocumSync</span>
+          <span class="brand-sub">Private Control Panel</span>
+        </div>
+      </div>
+      <div class="auth-status-row">
+        <div class="clock-chip"><i class="fa-regular fa-clock"></i> <span>MYT</span> <b id="clockMytLogin">--:--:--</b></div>
+        <div class="clock-chip"><i class="fa-solid fa-globe"></i> <span>WIB</span> <b id="clockWibLogin">--:--:--</b></div>
+        <button type="button" class="icon-btn theme-toggle" title="Ganti Tema Terang/Gelap"><i class="fa-solid fa-moon"></i></button>
+      </div>
+    </div>
+
+    <div class="auth-single-wrap">
+      <div class="auth-card gate-card">
+        <div class="auth-card-head text-center">
+          <div class="lock-avatar"><i class="fa-solid fa-lock"></i></div>
+          <h2>Autentikasi Portal</h2>
+          <p>Masukkan username &amp; password untuk mengakses dashboard.</p>
+        </div>
+
+        <form id="gateForm" class="form-stack" novalidate>
+          <div class="field">
+            <label for="gateUser">Username Portal</label>
+            <div class="input-wrap">
+              <span class="in-icon"><i class="fa-regular fa-user"></i></span>
+              <input id="gateUser" type="text" placeholder="Username" autocomplete="username" required autofocus>
+            </div>
+          </div>
+
+          <div class="field">
+            <label for="gatePass">Password</label>
+            <div class="input-wrap">
+              <span class="in-icon"><i class="fa-solid fa-key"></i></span>
+              <input id="gatePass" type="password" placeholder="••••••••" autocomplete="current-password" required>
+              <button type="button" id="toggleGatePw" class="eye-btn" title="Tampilkan/Sembunyikan"><i class="fa-regular fa-eye"></i></button>
+            </div>
+          </div>
+
+          <p id="gateErr" class="err-banner hidden"></p>
+          <button id="btnGateLogin" type="submit" class="btn primary lg full">
+            Masuk Portal <i class="fa-solid fa-arrow-right"></i>
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast"></div>
+  <script src="/static/app.js?v=9"></script>
+</body>
+</html>

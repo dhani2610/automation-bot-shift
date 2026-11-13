@@ -3,13 +3,15 @@
 from __future__ import annotations
 
 import datetime as dt
+import hashlib
+import hmac
 import os
 from pathlib import Path
 from typing import Any
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Query, Request, Response
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
@@ -36,6 +38,60 @@ def on_startup() -> None:
         MANAGER.start_watchdog(60.0)
     except db.DatabaseError as exc:
         print(f"[WARNING] MySQL belum terhubung saat startup: {exc}")
+
+
+GATE_SECRET = os.getenv("GATE_SECRET_KEY", "locum-gate-secret-key-salt-987123")
+
+
+def make_gate_token(username: str) -> str:
+    sig = hmac.new(GATE_SECRET.encode("utf-8"), username.encode("utf-8"), hashlib.sha256).hexdigest()
+    return f"{username}:{sig}"
+
+
+def verify_gate_token(token: str | None) -> str | None:
+    if not token or ":" not in token:
+        return None
+    username, sig = token.split(":", 1)
+    expected = hmac.new(GATE_SECRET.encode("utf-8"), username.encode("utf-8"), hashlib.sha256).hexdigest()
+    if hmac.compare_digest(sig, expected):
+        return username
+    return None
+
+
+@app.middleware("http")
+async def gate_auth_middleware(request: Request, call_next):
+    path = request.url.path
+    if (
+        path.startswith("/static")
+        or path == "/gate"
+        or path == "/api/gate/login"
+        or path == "/api/health"
+        or path == "/favicon.ico"
+    ):
+        return await call_next(request)
+
+    gate_user = verify_gate_token(request.cookies.get("gate_token"))
+    if not gate_user:
+        if path.startswith("/api/"):
+            return JSONResponse(
+                status_code=401,
+                content={"ok": False, "detail": "Akses ditolak. Silakan login ke portal terlebih dahulu."},
+            )
+        return RedirectResponse("/gate", status_code=302)
+
+    return await call_next(request)
+
+
+class GateLoginRequest(BaseModel):
+    username: str
+    password: str
+
+
+class GateChangeCredentialsRequest(BaseModel):
+    current_username: str = ""
+    current_password: str
+    new_username: str = ""
+    new_password: str = ""
 
 
 class LoginRequest(BaseModel):
@@ -108,6 +164,13 @@ def _get_authed_client(ic: str) -> tuple[LocumClient, dict[str, Any]]:
 def index(request: Request) -> RedirectResponse:
     target = "/jadwal" if request.cookies.get("locum_ic") else "/login"
     return RedirectResponse(url=target, status_code=302)
+
+
+@app.get("/gate", response_class=HTMLResponse)
+def page_gate(request: Request) -> Any:
+    if verify_gate_token(request.cookies.get("gate_token")):
+        return RedirectResponse("/", status_code=302)
+    return templates.TemplateResponse(request, "gate.html", {"page_name": "gate", "active_page": "gate"})
 
 
 @app.get("/login", response_class=HTMLResponse)
@@ -230,6 +293,60 @@ def api_accounts() -> dict[str, Any]:
         return {"ok": True, "accounts": db.list_accounts()}
     except db.DatabaseError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@app.post("/api/gate/login")
+def api_gate_login(req: GateLoginRequest, response: Response) -> dict[str, Any]:
+    try:
+        user = db.verify_app_user(req.username, req.password)
+    except db.DatabaseError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    if not user:
+        raise HTTPException(status_code=401, detail="Username atau password portal salah.")
+
+    token = make_gate_token(user["username"])
+    response.set_cookie("gate_token", token, max_age=30 * 86400, samesite="lax", httponly=False)
+    return {"ok": True, "username": user["username"]}
+
+
+@app.post("/api/gate/logout")
+def api_gate_logout(response: Response) -> dict[str, Any]:
+    response.delete_cookie("gate_token")
+    response.delete_cookie("locum_ic")
+    return {"ok": True}
+
+
+@app.get("/api/gate/me")
+def api_gate_me(request: Request) -> dict[str, Any]:
+    username = verify_gate_token(request.cookies.get("gate_token"))
+    if not username:
+        raise HTTPException(status_code=401, detail="Belum login ke portal.")
+    return {"ok": True, "username": username}
+
+
+@app.post("/api/gate/change-credentials")
+def api_gate_change_credentials(
+    req: GateChangeCredentialsRequest, request: Request, response: Response
+) -> dict[str, Any]:
+    current_gate_user = verify_gate_token(request.cookies.get("gate_token"))
+    if not current_gate_user:
+        raise HTTPException(status_code=401, detail="Belum login ke portal.")
+
+    target_user = req.current_username.strip() or current_gate_user
+    try:
+        updated = db.update_app_credentials(
+            current_username=target_user,
+            current_password=req.current_password,
+            new_username=req.new_username.strip() or None,
+            new_password=req.new_password.strip() or None,
+        )
+    except db.DatabaseError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    token = make_gate_token(updated["username"])
+    response.set_cookie("gate_token", token, max_age=30 * 86400, samesite="lax", httponly=False)
+    return {"ok": True, "username": updated["username"]}
 
 
 @app.post("/api/login")

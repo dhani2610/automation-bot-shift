@@ -6,3 +6,6 @@ __pycache__/
 *.log
 .DS_Store
 nul
+
+direct_emergency_book.py
+booking_log.txt

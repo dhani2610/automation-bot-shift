@@ -59,7 +59,8 @@
         </div>
         <div class="sidebar-foot-actions">
           <button type="button" class="icon-btn theme-toggle" title="Ganti Tema"><i class="fa-solid fa-moon"></i></button>
-          <button type="button" id="btnLogout" class="btn soft sm" style="flex:1" title="Keluar / Ganti Akun"><i class="fa-solid fa-right-from-bracket"></i> Keluar</button>
+          <button type="button" id="btnOpenSecurity" class="btn soft sm" title="Keamanan Portal"><i class="fa-solid fa-key"></i> Keamanan</button>
+          <button type="button" id="btnLogout" class="btn soft sm" title="Keluar / Ganti Akun"><i class="fa-solid fa-right-from-bracket"></i></button>
         </div>
       </div>
     </aside>
@@ -77,6 +78,7 @@
         </div>
         <div class="mob-actions">
           <button type="button" class="icon-btn theme-toggle" title="Ganti Tema"><i class="fa-solid fa-moon"></i></button>
+          <button type="button" id="btnOpenSecurityMob" class="icon-btn soft" title="Keamanan Portal"><i class="fa-solid fa-key"></i></button>
           <button type="button" id="btnLogoutMob" class="icon-btn danger-ghost" title="Keluar"><i class="fa-solid fa-right-from-bracket"></i></button>
         </div>
       </header>
@@ -133,6 +135,45 @@
 
   {% block modals %}{% endblock %}
 
+  <!-- MODAL PENGATURAN KEAMANAN / GANTI PASSWORD -->
+  <div id="modalSecurity" class="modal-back hidden">
+    <div class="modal-card">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+        <h3><i class="fa-solid fa-shield-halved"></i> Keamanan Portal</h3>
+        <button type="button" id="btnCloseSecurity" class="icon-btn sm" style="border:none;"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <p class="muted small" style="margin-bottom:16px;">Ubah username &amp; password yang digunakan untuk mengakses portal dashboard.</p>
+      
+      <form id="formSecurity" class="form-stack" novalidate>
+        <div class="field">
+          <label>Username Saat Ini</label>
+          <input type="text" id="secCurrentUsername" class="input" readonly style="opacity:0.8; background:var(--bg-muted);">
+        </div>
+        <div class="field">
+          <label>Password Saat Ini <span style="color:var(--danger)">*</span></label>
+          <input type="password" id="secCurrentPassword" class="input" placeholder="Masukkan password saat ini" required>
+        </div>
+        <hr style="border:none; border-top:1px solid var(--border); margin:12px 0;">
+        <div class="field">
+          <label>Username Baru (Opsional)</label>
+          <input type="text" id="secNewUsername" class="input" placeholder="Biarkan kosong jika tidak ganti">
+        </div>
+        <div class="field">
+          <label>Password Baru (Opsional)</label>
+          <input type="password" id="secNewPassword" class="input" placeholder="Minimal 5 karakter (kosongkan jika tidak ganti)">
+        </div>
+        <div class="field">
+          <label>Konfirmasi Password Baru</label>
+          <input type="password" id="secConfirmPassword" class="input" placeholder="Ketik ulang password baru">
+        </div>
+        <div class="btn-row" style="margin-top:16px;">
+          <button type="submit" id="btnSaveSecurity" class="btn primary"><i class="fa-solid fa-check"></i> Simpan Perubahan</button>
+          <button type="button" id="btnCancelSecurity" class="btn soft">Tutup</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <!-- CONFIRM / DETAIL MODAL -->
   <div id="modalBack" class="modal-back hidden">
     <div class="modal-card">
@@ -146,7 +187,7 @@
   </div>
 
   <div id="toast" class="toast"></div>
-  <script src="/static/app.js?v=8"></script>
+  <script src="/static/app.js?v=9"></script>
 </body>
 </html>
 
