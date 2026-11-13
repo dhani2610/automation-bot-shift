@@ -1293,14 +1293,22 @@
           box.innerHTML = '<p class="muted">Belum ada log untuk scheduler ini.</p>';
           return;
         }
-        box.innerHTML = res.logs.map((l) => `
-          <div class="log-row ${esc(l.level)}">
+        box.innerHTML = res.logs.map((l, idx) => `
+          <div class="log-row ${esc(l.level)}" style="align-items:center;">
             <span class="log-ts">[${esc(l.created_at)}]</span>
             <span class="log-lvl">${esc(l.level)}</span>
             ${(jobId === 'ALL' && l.job_title) ? `<span class="badge">#${esc(l.job_id)} ${esc(l.job_title)}</span>` : ''}
-            <span>${esc(l.message)}</span>
+            <span style="flex:1; min-width:0;">${esc(l.message)}</span>
+            <button type="button" class="btn soft sm btn-log-inspect" data-idx="${idx}" style="padding:3px 8px; font-size:11px; margin-left:auto;" title="Lihat JSON API & Analisa Respon Server"><i class="fa-solid fa-eye"></i> JSON</button>
           </div>
         `).join('');
+
+        $$('.btn-log-inspect', box).forEach((btn) => {
+          btn.onclick = async () => {
+            const logItem = res.logs[Number(btn.dataset.idx)];
+            await showApiInspectModal(logItem);
+          };
+        });
       } catch {
         // ignore if MySQL offline
       }
@@ -1317,63 +1325,79 @@
     $('#logLevelFilter').onchange = loadLogs;
     $('#btnRefreshLogs').onclick = loadLogs;
 
+    async function showApiInspectModal(logItem = null) {
+      if (!state.ic) {
+        toast('Silakan login terlebih dahulu.');
+        return;
+      }
+      const topBtn = $('#btnInspectApi');
+      if (topBtn) {
+        topBtn.disabled = true;
+        topBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Mengambil data…';
+      }
+      try {
+        const selJob = state.jobs.find((j) => String(j.id) === String(state.logJobId));
+        let targetDate = (selJob && selJob.target_dates && selJob.target_dates.length)
+          ? selJob.target_dates[0]
+          : '2026-12-14';
+        if (logItem && logItem.message) {
+          const matchDate = logItem.message.match(/2026-\d{2}-\d{2}/);
+          if (matchDate) targetDate = matchDate[0];
+        }
+
+        const res = await api(`/api/inspect-raw?ic=${encodeURIComponent(state.ic)}&target_date=${encodeURIComponent(targetDate)}`);
+        const jsonText = JSON.stringify(res, null, 2);
+        const modalHtml = `
+          <div style="font-size:13px; line-height:1.5;">
+            ${logItem ? `<div style="background:var(--surface-2); border:1px solid var(--line); border-radius:8px; padding:10px; margin-bottom:12px;">
+              <b>Log yang Diinspeksi:</b>
+              <div class="muted small" style="margin-top:2px;">[${esc(logItem.created_at)}] <b>${esc(logItem.level)}</b>: ${esc(logItem.message)}</div>
+            </div>` : ''}
+            <div style="margin-bottom:10px; display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+              <span class="badge">Waktu Server: ${esc(res.server_time_myt)}</span>
+              <span class="badge">Akun: ${esc(res.account?.name)} (${esc(res.account?.role)})</span>
+              <span class="badge">Latensi: ${esc(res.latency_ms?.availability)}ms</span>
+              <span class="badge">Total Hari Terbuka: ${esc(res.total_days)}</span>
+            </div>
+            ${res.target_day_json
+              ? `<div style="background:rgba(59,130,246,0.1); border:1px solid rgba(59,130,246,0.3); border-radius:8px; padding:10px; margin-bottom:12px;">
+                   <b>Status Target Tanggal (${esc(res.target_date)}):</b>
+                   <pre style="margin:6px 0 0; background:none; padding:0; max-height:140px; overflow:auto; color:var(--text); font-family:monospace; font-size:12px;">${esc(JSON.stringify(res.target_day_json, null, 2))}</pre>
+                 </div>`
+              : `<div style="background:rgba(239,68,68,0.1); border:1px solid rgba(239,68,68,0.3); border-radius:8px; padding:10px; margin-bottom:12px; color:#ef4444;">
+                   <b>Target Tanggal ${esc(res.target_date)} belum muncul di server</b> (artinya slot tanggal ini belum dibuka sebelum 00:00 MYT).
+                 </div>`}
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+              <b>Format JSON Lengkap dari Server Locum:</b>
+              <button type="button" class="btn soft sm" id="btnCopyJson"><i class="fa-solid fa-copy"></i> Salin JSON</button>
+            </div>
+            <pre id="rawJsonBox" style="background:var(--bg); border:1px solid var(--line); border-radius:8px; padding:12px; max-height:360px; overflow:auto; font-family:monospace; font-size:11px; white-space:pre-wrap; word-break:break-all;">${esc(jsonText)}</pre>
+          </div>
+        `;
+        openModal('Bukti JSON API Server Locum (Live Return)', modalHtml, null, 'Tutup', false, true);
+        const copyBtn = $('#btnCopyJson');
+        if (copyBtn) {
+          copyBtn.onclick = () => {
+            navigator.clipboard.writeText(jsonText).then(() => {
+              toast('JSON berhasil disalin ke clipboard!');
+            }).catch(() => {
+              toast('Gagal menyalin otomatis.');
+            });
+          };
+        }
+      } catch (err) {
+        toast(`Gagal memuat JSON API: ${err.message}`);
+      } finally {
+        if (topBtn) {
+          topBtn.disabled = false;
+          topBtn.innerHTML = '<i class="fa-solid fa-eye"></i> Cek JSON API Asli';
+        }
+      }
+    }
+
     const btnInspect = $('#btnInspectApi');
     if (btnInspect) {
-      btnInspect.onclick = async () => {
-        if (!state.ic) {
-          toast('Silakan login terlebih dahulu.');
-          return;
-        }
-        btnInspect.disabled = true;
-        btnInspect.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Mengambil data…';
-        try {
-          const selJob = state.jobs.find((j) => String(j.id) === String(state.logJobId));
-          const targetDate = (selJob && selJob.target_dates && selJob.target_dates.length)
-            ? selJob.target_dates[0]
-            : '2026-12-14';
-          const res = await api(`/api/inspect-raw?ic=${encodeURIComponent(state.ic)}&target_date=${encodeURIComponent(targetDate)}`);
-          const jsonText = JSON.stringify(res, null, 2);
-          const modalHtml = `
-            <div style="font-size:13px; line-height:1.5;">
-              <div style="margin-bottom:10px; display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
-                <span class="badge">Waktu: ${esc(res.server_time_myt)}</span>
-                <span class="badge">Akun: ${esc(res.account?.name)} (${esc(res.account?.role)})</span>
-                <span class="badge">Latensi: ${esc(res.latency_ms?.availability)}ms</span>
-                <span class="badge">Total Hari: ${esc(res.total_days)}</span>
-              </div>
-              ${res.target_day_json
-                ? `<div style="background:rgba(59,130,246,0.1); border:1px solid rgba(59,130,246,0.3); border-radius:8px; padding:10px; margin-bottom:12px;">
-                     <b>Target Tanggal (${esc(res.target_date)}):</b>
-                     <pre style="margin:6px 0 0; background:none; padding:0; max-height:140px; overflow:auto; color:var(--text); font-family:monospace; font-size:12px;">${esc(JSON.stringify(res.target_day_json, null, 2))}</pre>
-                   </div>`
-                : `<div style="background:rgba(239,68,68,0.1); border:1px solid rgba(239,68,68,0.3); border-radius:8px; padding:10px; margin-bottom:12px; color:#ef4444;">
-                     <b>Target ${esc(res.target_date)} belum muncul di server</b> (artinya slot tanggal ini belum dirilis sebelum 00:00 MYT).
-                   </div>`}
-              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-                <b>Format JSON Lengkap dari Server:</b>
-                <button type="button" class="btn soft sm" id="btnCopyJson"><i class="fa-solid fa-copy"></i> Salin JSON</button>
-              </div>
-              <pre id="rawJsonBox" style="background:var(--bg); border:1px solid var(--line); border-radius:8px; padding:12px; max-height:360px; overflow:auto; font-family:monospace; font-size:11px; white-space:pre-wrap; word-break:break-all;">${esc(jsonText)}</pre>
-            </div>
-          `;
-          openModal('Respon JSON API Server Locum (Live Proof)', modalHtml, null, 'Tutup', false, true);
-          const copyBtn = $('#btnCopyJson');
-          if (copyBtn) {
-            copyBtn.onclick = () => {
-              navigator.clipboard.writeText(jsonText).then(() => {
-                toast('JSON berhasil disalin ke clipboard!');
-              }).catch(() => {
-                toast('Gagal menyalin otomatis.');
-              });
-            };
-          }
-        } catch (err) {
-          toast(`Gagal memuat JSON API: ${err.message}`);
-        } finally {
-          btnInspect.disabled = false;
-          btnInspect.innerHTML = '<i class="fa-solid fa-eye"></i> Cek JSON API Asli';
-        }
-      };
+      btnInspect.onclick = () => showApiInspectModal(null);
     }
 
     populateLogJobFilter();
